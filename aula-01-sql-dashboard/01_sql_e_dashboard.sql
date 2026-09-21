@@ -7,6 +7,8 @@
 -- MAGIC
 -- MAGIC Neste notebook você vai responder cada um deles com SQL e, no fim, montar um **dashboard** com uma página por diretoria.
 -- MAGIC
+-- MAGIC > Ainda não leu o desafio? Comece pelo notebook **`00_o_desafio`**: ele apresenta a empresa, os diretores, os dados e as 12 perguntas.
+-- MAGIC
 -- MAGIC | Bloco | Tempo | O que acontece |
 -- MAGIC |---|---|---|
 -- MAGIC | 0. Setup | antes da aula | Catálogo, schemas, volume e as 4 tabelas |

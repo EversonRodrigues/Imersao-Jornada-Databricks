@@ -138,8 +138,8 @@ Os arquivos estão em [`dados/`](./dados/), em CSV (Aula 1) e Parquet (Aula 2).
 ├── resources/                         ← Job, dashboards e Genie declarados em YAML
 ├── dados/                             ← CSVs e Parquets do e-commerce
 ├── aula-01-sql-dashboard/
-│   ├── 01_sql_e_dashboard.sql         ← notebook da aula
-│   ├── queries/                       ← as mesmas consultas em arquivos soltos
+│   ├── 00_o_desafio.sql               ← o desafio: diretores, dados e as 12 perguntas
+│   ├── 01_sql_e_dashboard.sql         ← a resolução, passo a passo
 │   └── dashboard/                     ← dashboard pronto para importar
 ├── aula-02-python-engenharia/
 │   ├── 01_ingestao_bronze.py          ← fontes externas → bronze

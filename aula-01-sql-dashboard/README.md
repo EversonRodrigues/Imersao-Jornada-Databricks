@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| **Material principal** | [`01_sql_e_dashboard.sql`](./01_sql_e_dashboard.sql) (notebook Databricks) |
-| **Apoio** | [`queries/`](./queries/) (as mesmas consultas em arquivos soltos) e [`dashboard/`](./dashboard/) (dashboard pronto para importar) |
+| **Notebooks** | [`00_o_desafio.sql`](./00_o_desafio.sql): o desafio inteiro (os diretores, os dados, as 12 perguntas e a entrega)<br>[`01_sql_e_dashboard.sql`](./01_sql_e_dashboard.sql): a resolução, passo a passo |
+| **Apoio** | [`dashboard/`](./dashboard/) (dashboard pronto para importar) |
 | **Duração** | ~100 minutos |
 | **Pré-requisito** | Conta no Databricks Free Edition (veja o [README principal](../README.md#antes-da-aula-1-crie-sua-conta-5-minutos)) |
 
@@ -120,14 +120,18 @@ Um dashboard do Databricks é feito de **datasets** (consultas SQL) e **widgets*
 
 ## Parte 2: passo a passo
 
-### 1. Abra o notebook
+### 1. Leia o desafio
+
+Abra `aula-01-sql-dashboard/00_o_desafio`. Ele não tem código para rodar: apresenta a empresa, os três diretores, as tabelas e as 12 perguntas que você vai responder, cada uma com o conceito de SQL que a resolve. Se quiser, tente responder algumas sozinho antes de ver a resolução.
+
+### 2. Abra o notebook da resolução
 
 - **Com Git folder** (recomendado): **Workspace → Create → Git folder**, cole a URL do repositório e abra `aula-01-sql-dashboard/01_sql_e_dashboard`.
-- **Sem Git:** baixe [`01_sql_e_dashboard.sql`](./01_sql_e_dashboard.sql) e use **Workspace → Import**.
+- **Sem Git:** baixe [`00_o_desafio.sql`](./00_o_desafio.sql) e [`01_sql_e_dashboard.sql`](./01_sql_e_dashboard.sql) e use **Workspace → Import**.
 
 No canto superior direito, conecte o notebook em **Serverless**. Rode célula por célula com `Shift + Enter`.
 
-### 2. Setup
+### 3. Setup
 
 A primeira célula de código cria o catálogo, os 4 schemas e o volume. Depois, envie os 4 CSVs da pasta [`dados/`](../dados/):
 
@@ -135,11 +139,11 @@ A primeira célula de código cria o catálogo, os 4 schemas e o volume. Depois,
 2. **Upload to this volume** e arraste `produtos.csv`, `clientes.csv`, `vendas.csv` e `preco_competidores.csv`.
 3. Volte ao notebook e rode o `LIST`: devem aparecer os 4 arquivos.
 
-### 3. Siga o notebook
+### 4. Siga o notebook
 
 Cada bloco começa com a pergunta do diretor, em texto, e segue com as consultas. **A célula do `INSERT` com `'duas'` vai dar erro, e esse erro é o objetivo**: é a tabela protegendo o dado.
 
-### 4. Monte o dashboard
+### 5. Monte o dashboard
 
 **Opção A, importar pronto (2 min):**
 1. Baixe [`dashboard/diretoria_ecommerce.lvdash.json`](./dashboard/diretoria_ecommerce.lvdash.json).
@@ -148,7 +152,7 @@ Cada bloco começa com a pergunta do diretor, em texto, e segue com as consultas
 
 **Opção B, montar do zero (15 min, recomendado para aprender):**
 1. **Dashboards → Create dashboard**. Renomeie para *Diretoria E-commerce*.
-2. Aba **Data → Create from SQL**. Crie um dataset para cada diretoria usando as consultas do notebook (ou dos arquivos em [`queries/`](./queries/)).
+2. Aba **Data → Create from SQL**. Crie um dataset para cada diretoria usando as consultas do notebook `01_sql_e_dashboard`.
 3. Volte ao canvas e crie **3 páginas**: Vendas, Clientes e Pricing.
 4. Em cada página, adicione:
    - **Vendas:** indicadores de receita, vendas e ticket médio; linha de receita diária por canal; barras de receita por categoria; tabela com o top 10 de produtos.
