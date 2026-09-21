@@ -1,0 +1,49 @@
+# Pipeline diário: fontes externas → bronze → silver → gold → testes → documentação para o Genie.
+# Na Aula 2 este Job é criado à mão pela interface; na Aula 3 ele vira código aqui.
+resources:
+  jobs:
+    pipeline_ecommerce:
+      name: Pipeline E-commerce
+
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: America/Sao_Paulo
+
+      email_notifications:
+        on_failure:
+          - ${workspace.current_user.userName}
+
+      parameters:
+        - name: catalogo
+          default: ${var.catalogo}
+        - name: url_base
+          default: ${var.url_base}
+
+      tasks:
+        - task_key: ingestao_bronze
+          notebook_task:
+            notebook_path: ../aula-02-python-engenharia/01_ingestao_bronze.py
+
+        - task_key: silver
+          depends_on:
+            - task_key: ingestao_bronze
+          notebook_task:
+            notebook_path: ../aula-02-python-engenharia/02_silver.py
+
+        - task_key: gold
+          depends_on:
+            - task_key: silver
+          notebook_task:
+            notebook_path: ../aula-02-python-engenharia/03_gold.sql
+
+        - task_key: testes_qualidade
+          depends_on:
+            - task_key: gold
+          notebook_task:
+            notebook_path: ../aula-03-claude-code/testes/04_testes_qualidade.py
+
+        - task_key: documentar_para_genie
+          depends_on:
+            - task_key: testes_qualidade
+          notebook_task:
+            notebook_path: ../aula-04-genie/01_preparar_dados_para_ia.sql
