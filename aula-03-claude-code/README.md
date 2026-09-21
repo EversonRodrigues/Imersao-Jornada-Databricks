@@ -54,7 +54,7 @@ Um bundle é o projeto Databricks descrito em arquivos. O `databricks.yml` diz *
 databricks.yml                       ← nome do projeto, variáveis e ambientes (dev, prod)
 resources/
 ├── pipeline_ecommerce.job.yml       ← o Job da Aula 2, agora com testes e documentação
-├── diretoria_aula01.dashboard.yml   ← dashboard da Aula 1 (sobre raw)
+├── diretoria_aula01.dashboard.yml   ← dashboard da Aula 1 (sobre a bronze)
 ├── diretoria_gold.dashboard.yml     ← o mesmo painel sobre a gold
 └── diretoria.genie_space.yml        ← o Genie da Aula 4
 ```

@@ -21,7 +21,7 @@ sync:
 
 variables:
   catalogo:
-    description: Catálogo do Unity Catalog com os schemas raw, bronze, silver e gold.
+    description: Catálogo do Unity Catalog com os schemas bronze, silver e gold.
     default: ecommerce
   url_base:
     description: Endereço de onde o pipeline baixa os arquivos Parquet (o "data lake").

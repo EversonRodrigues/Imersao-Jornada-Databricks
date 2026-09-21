@@ -173,11 +173,11 @@
 -- MAGIC Tudo acontece no **Databricks Free Edition**, sem instalar nada no seu computador.
 -- MAGIC
 -- MAGIC ```
--- MAGIC  CSVs ──► Volume ──► Tabelas Delta ──► SQL no notebook ──► Dashboard
--- MAGIC          (arquivos)   (ecommerce.raw)    (as 12 perguntas)   (os 3 diretores)
+-- MAGIC  CSVs ──► Tabelas Delta ──► SQL no notebook ──► Dashboard
+-- MAGIC  (upload)  (ecommerce.bronze)  (as 12 perguntas)   (os 3 diretores)
 -- MAGIC ```
 -- MAGIC
--- MAGIC 1. **Setup:** criar o catálogo `ecommerce`, os schemas e o volume, e subir os 4 CSVs.
+-- MAGIC 1. **Setup:** criar o catálogo `ecommerce` e os schemas, e subir os 4 CSVs como tabelas na bronze.
 -- MAGIC 2. **CSV × Tabela:** transformar os arquivos em tabelas e ver por que isso importa.
 -- MAGIC 3. **As 12 perguntas**, uma diretoria de cada vez.
 -- MAGIC 4. **O dashboard**, com uma página por diretoria.

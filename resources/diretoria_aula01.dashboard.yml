@@ -1,4 +1,4 @@
-# Aula 1: as consultas feitas à mão sobre ecommerce.raw
+# Aula 1: as consultas feitas à mão sobre ecommerce.bronze
 resources:
   dashboards:
     diretoria_aula01:
@@ -6,4 +6,4 @@ resources:
       file_path: ../aula-01-sql-dashboard/dashboard/diretoria_ecommerce.lvdash.json
       warehouse_id: ${var.warehouse_id}
       dataset_catalog: ${var.catalogo}
-      dataset_schema: raw
+      dataset_schema: bronze

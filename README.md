@@ -44,12 +44,11 @@ flowchart LR
     subgraph Fontes
         GH[Data lake<br/>Parquet no GitHub]
         API[API do IBGE<br/>JSON]
-        CSV[CSVs<br/>upload manual]
+        CSV[CSVs<br/>upload manual<br/>Aula 1]
     end
 
     subgraph Databricks["Databricks · Unity Catalog · catálogo ecommerce"]
-        VOL[(Volume<br/>raw.arquivos)]
-        RAW[(raw<br/>Aula 1)]
+        VOL[(Volume<br/>bronze.arquivos<br/>Aula 2)]
         BR[(bronze)]
         SI[(silver)]
         GO[(gold)]
@@ -61,7 +60,7 @@ flowchart LR
         GEN[Genie<br/>Aula 4]
     end
 
-    CSV --> VOL --> RAW --> DASH
+    CSV --> BR
     GH --> VOL
     API --> VOL
     VOL --> BR --> SI --> GO
@@ -72,8 +71,8 @@ flowchart LR
 
 | Camada | O que guarda | Quem cria |
 |---|---|---|
-| `ecommerce.raw` | As 4 tabelas criadas na Aula 1 a partir dos CSVs | Você, com SQL |
-| `ecommerce.bronze` | Cópia fiel das fontes + metadados de ingestão | Job (Python) |
+| `ecommerce.bronze` | O dado como chegou da origem | Aula 1: você, pelo upload dos CSVs. A partir da Aula 2: o Job, com metadados de ingestão |
+| `ecommerce.bronze.arquivos` | Volume com os arquivos originais baixados pelo pipeline | Job (Python), a partir da Aula 2 |
 | `ecommerce.silver` | Dados limpos, tipados e enriquecidos | Job (PySpark) |
 | `ecommerce.gold` | Tabelas prontas para cada diretoria | Job (SQL) |
 
@@ -166,7 +165,7 @@ databricks bundle deploy -t prod            # cria Job, 2 dashboards e o Genie s
 databricks bundle run pipeline_ecommerce -t prod   # roda ingestão → gold → testes → documentação
 ```
 
-O dashboard da Aula 1 lê de `ecommerce.raw`. Por isso, rode o notebook da Aula 1 uma vez antes de abri-lo.
+O dashboard da Aula 1 lê das tabelas `ecommerce.bronze`, que o Job também preenche.
 
 ---
 

@@ -15,8 +15,8 @@ E-commerce brasileiro com vendas em dois canais (site e loja física). Três dir
 ## 2. Plataforma
 
 - Databricks Free Edition, compute **serverless**.
-- Unity Catalog, catálogo `ecommerce`, schemas `raw`, `bronze`, `silver` e `gold`.
-- Volume `ecommerce.raw.arquivos` para arquivos brutos; subpasta `landing/` para o que o pipeline baixa.
+- Unity Catalog, catálogo `ecommerce`, schemas `bronze`, `silver` e `gold`.
+- Volume `ecommerce.bronze.arquivos` para arquivos brutos; subpasta `landing/` para o que o pipeline baixa.
 - Tudo implantado por **Declarative Automation Bundle** (`databricks.yml` na raiz).
 
 ## 3. Fontes

@@ -14,7 +14,7 @@
 | Bloco | Tempo | O que acontece |
 |---|---|---|
 | Contexto | 10 min | O e-commerce, os 3 diretores e as perguntas |
-| Setup | 10 min | Catálogo, schemas, volume e upload dos CSVs |
+| Setup | 10 min | Catálogo, schemas e upload dos CSVs como tabelas |
 | CSV × Tabela | 5 min | Por que uma tabela Delta é melhor que um arquivo |
 | Diretoria de Vendas | 25 min | `SELECT`, `LIMIT`, `ORDER BY`, `WHERE`, agregações, `GROUP BY`, `JOIN` |
 | Diretoria de Clientes | 15 min | Top 10 clientes, clientes por estado |
@@ -49,14 +49,14 @@ Todo dado no Databricks tem um endereço de três partes:
 
 ```
 catálogo  .  schema  .  tabela
-ecommerce .  raw     .  vendas
+ecommerce .  bronze  .  vendas
 ```
 
 - **Catálogo:** o nível mais alto, geralmente um projeto ou uma área da empresa (`ecommerce`).
-- **Schema:** um agrupamento dentro do catálogo. Aqui, um por camada: `raw`, `bronze`, `silver` e `gold`.
+- **Schema:** um agrupamento dentro do catálogo. Aqui, um por camada: `bronze`, `silver` e `gold`.
 - **Tabela / view / volume:** onde o dado de fato está.
 
-Um **volume** é uma pasta governada para **arquivos** (CSV, Parquet, JSON, imagens). Os CSVs chegam primeiro no volume `ecommerce.raw.arquivos`. Depois viram **tabelas**.
+Hoje os CSVs entram direto como **tabelas** na camada **bronze**, pela tela de upload do Databricks. A bronze é a primeira camada: o dado exatamente como chegou da origem. Na Aula 2 você vai conhecer o **volume**, uma pasta governada para guardar os arquivos originais antes de virarem tabela.
 
 ### Por que transformar o CSV em tabela?
 
@@ -72,7 +72,7 @@ Em SQL você descreve **o que** quer, não **como** buscar:
 
 ```sql
 SELECT nome_produto, preco_atual   -- quais colunas
-FROM ecommerce.raw.produtos        -- de onde
+FROM ecommerce.bronze.produtos     -- de onde
 ORDER BY preco_atual DESC          -- em que ordem
 LIMIT 10;                          -- quantas linhas
 ```
@@ -133,11 +133,14 @@ No canto superior direito, conecte o notebook em **Serverless**. Rode célula po
 
 ### 3. Setup
 
-A primeira célula de código cria o catálogo, os 4 schemas e o volume. Depois, envie os 4 CSVs da pasta [`dados/`](../dados/):
+A primeira célula de código cria o catálogo e os schemas. Depois, suba os 4 CSVs da pasta [`dados/`](../dados/) como tabelas, **um de cada vez**:
 
-1. Menu lateral **Catalog → ecommerce → raw → arquivos**.
-2. **Upload to this volume** e arraste `produtos.csv`, `clientes.csv`, `vendas.csv` e `preco_competidores.csv`.
-3. Volte ao notebook e rode o `LIST`: devem aparecer os 4 arquivos.
+1. **+ New → Add or upload data → Create or modify table**.
+2. Arraste o CSV (`vendas.csv`, `produtos.csv`, `clientes.csv` ou `preco_competidores.csv`).
+3. No topo, escolha o catálogo **`ecommerce`** e o schema **`bronze`**. Mantenha o nome da tabela sugerido (igual ao do arquivo).
+4. Confira a prévia dos tipos das colunas e clique em **Create table**.
+
+Volte ao notebook e rode o `SHOW TABLES` e a contagem: 3.020 vendas, 215 produtos, 50 clientes e 728 preços.
 
 ### 4. Siga o notebook
 
@@ -148,7 +151,7 @@ Cada bloco começa com a pergunta do diretor, em texto, e segue com as consultas
 **Opção A, importar pronto (2 min):**
 1. Baixe [`dashboard/diretoria_ecommerce.lvdash.json`](./dashboard/diretoria_ecommerce.lvdash.json).
 2. **Dashboards → seta ao lado de Create dashboard → Import dashboard from file**.
-3. Se ele pedir, escolha o catálogo `ecommerce` e o schema `raw`. Clique em **Publish**.
+3. Clique em **Publish**. As consultas já apontam para `ecommerce.bronze`.
 
 **Opção B, montar do zero (15 min, recomendado para aprender):**
 1. **Dashboards → Create dashboard**. Renomeie para *Diretoria E-commerce*.
@@ -188,7 +191,6 @@ Se os seus números baterem com estes, você fez tudo certo.
 
 | Erro | Causa | Como resolver |
 |---|---|---|
-| `PATH_NOT_FOUND` no `read_files` | CSV não foi enviado ou está com outro nome | Confira com `LIST '/Volumes/ecommerce/raw/arquivos/'` |
 | `TABLE_OR_VIEW_NOT_FOUND` | Esqueceu de rodar a célula que cria as tabelas | Rode o bloco "CSV × Tabela" |
 | `MISSING_AGGREGATION` | Coluna no `SELECT` fora do `GROUP BY` | Aplique a regra de ouro |
 | `CAST_INVALID_INPUT` no `INSERT` | É o erro esperado da demonstração | Siga para a próxima célula |

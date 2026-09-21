@@ -2,7 +2,7 @@
   "datasets": [
     {
       "name": "ds_vendas",
-      "displayName": "Vendas (raw)",
+      "displayName": "Vendas (bronze)",
       "columns": [
         {
           "displayName": "Vendas",
@@ -23,22 +23,22 @@
         "  COUNT(*)                                  AS total_vendas,\n",
         "  SUM(v.quantidade)                         AS itens_vendidos,\n",
         "  SUM(v.quantidade * v.preco_unitario)      AS receita\n",
-        "FROM ecommerce.raw.vendas v\n",
-        "LEFT JOIN ecommerce.raw.produtos p ON v.id_produto = p.id_produto\n",
+        "FROM ecommerce.bronze.vendas v\n",
+        "LEFT JOIN ecommerce.bronze.produtos p ON v.id_produto = p.id_produto\n",
         "GROUP BY ALL\n"
       ]
     },
     {
       "name": "ds_top_produtos",
-      "displayName": "Top 10 produtos (raw)",
+      "displayName": "Top 10 produtos (bronze)",
       "queryLines": [
         "SELECT\n",
         "  p.nome_produto,\n",
         "  p.categoria,\n",
         "  SUM(v.quantidade)                    AS itens_vendidos,\n",
         "  SUM(v.quantidade * v.preco_unitario) AS receita\n",
-        "FROM ecommerce.raw.vendas v\n",
-        "JOIN ecommerce.raw.produtos p ON v.id_produto = p.id_produto\n",
+        "FROM ecommerce.bronze.vendas v\n",
+        "JOIN ecommerce.bronze.produtos p ON v.id_produto = p.id_produto\n",
         "GROUP BY p.nome_produto, p.categoria\n",
         "ORDER BY receita DESC\n",
         "LIMIT 10\n"
@@ -46,7 +46,7 @@
     },
     {
       "name": "ds_clientes",
-      "displayName": "Clientes (raw)",
+      "displayName": "Clientes (bronze)",
       "queryLines": [
         "SELECT\n",
         "  c.id_cliente,\n",
@@ -55,15 +55,15 @@
         "  COUNT(*)                                  AS total_compras,\n",
         "  SUM(v.quantidade * v.preco_unitario)      AS receita,\n",
         "  AVG(v.quantidade * v.preco_unitario)      AS ticket_medio\n",
-        "FROM ecommerce.raw.vendas v\n",
-        "JOIN ecommerce.raw.clientes c ON v.id_cliente = c.id_cliente\n",
+        "FROM ecommerce.bronze.vendas v\n",
+        "JOIN ecommerce.bronze.clientes c ON v.id_cliente = c.id_cliente\n",
         "GROUP BY c.id_cliente, c.nome_cliente, c.estado\n",
         "ORDER BY receita DESC\n"
       ]
     },
     {
       "name": "ds_precos",
-      "displayName": "Competitividade (raw)",
+      "displayName": "Competitividade (bronze)",
       "queryLines": [
         "SELECT\n",
         "  p.id_produto,\n",
@@ -80,10 +80,10 @@
         "    ELSE 'NA_MEDIA'\n",
         "  END                                                            AS classificacao_preco,\n",
         "  COALESCE(r.receita, 0)                                         AS receita\n",
-        "FROM ecommerce.raw.produtos p\n",
-        "JOIN ecommerce.raw.preco_competidores pc ON p.id_produto = pc.id_produto\n",
+        "FROM ecommerce.bronze.produtos p\n",
+        "JOIN ecommerce.bronze.preco_competidores pc ON p.id_produto = pc.id_produto\n",
         "LEFT JOIN (\n",
-        "  SELECT id_produto, SUM(quantidade * preco_unitario) AS receita FROM ecommerce.raw.vendas GROUP BY id_produto\n",
+        "  SELECT id_produto, SUM(quantidade * preco_unitario) AS receita FROM ecommerce.bronze.vendas GROUP BY id_produto\n",
         ") r ON p.id_produto = r.id_produto\n",
         "GROUP BY p.id_produto, p.nome_produto, p.categoria, p.preco_atual, r.receita\n"
       ]
@@ -103,7 +103,7 @@
               "lines": [
                 "## Diretoria de Vendas\n",
                 "\n",
-                "Quanto vendemos, em qual canal e com quais produtos. Dados de `ecommerce.raw` (Aula 1)."
+                "Quanto vendemos, em qual canal e com quais produtos. Dados de `ecommerce.bronze` (Aula 1)."
               ]
             }
           },
@@ -1342,7 +1342,7 @@
             "name": "fonte",
             "multilineTextboxSpec": {
               "lines": [
-                "*Fonte: ecommerce.raw · consultas da Aula 1*"
+                "*Fonte: ecommerce.bronze · consultas da Aula 1*"
               ]
             }
           },

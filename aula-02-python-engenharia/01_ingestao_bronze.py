@@ -3,7 +3,9 @@
 # MAGIC # Aula 2 · Parte 1: Ingestão → Bronze
 # MAGIC ### "De onde vieram esses dados?"
 # MAGIC
-# MAGIC Na Aula 1 você baixou 4 CSVs e subiu na mão. Isso não escala: amanhã chega arquivo novo, e depois de amanhã também.
+# MAGIC Na Aula 1 você baixou 4 CSVs e subiu na mão, direto como tabelas na bronze. Isso não escala: amanhã chega arquivo novo, e depois de amanhã também.
+# MAGIC
+# MAGIC Este notebook **substitui aquele upload manual**: ele recria as mesmas tabelas `bronze.vendas`, `bronze.produtos`, `bronze.clientes` e `bronze.preco_competidores`, agora de forma automática e com colunas de controle.
 # MAGIC
 # MAGIC Hoje o dado vai **chegar sozinho**. Este notebook busca os dados em duas fontes externas e grava na camada **bronze**:
 # MAGIC
@@ -13,11 +15,11 @@
 # MAGIC | API do IBGE | Estados brasileiros e suas regiões | JSON (REST) |
 # MAGIC
 # MAGIC ```
-# MAGIC  fontes externas ──► volume ecommerce.raw.arquivos/landing ──► ecommerce.bronze.*
+# MAGIC  fontes externas ──► volume ecommerce.bronze.arquivos/landing ──► tabelas ecommerce.bronze.*
 # MAGIC   (HTTP / API)          (cópia fiel do arquivo)                (tabela Delta + metadados)
 # MAGIC ```
 # MAGIC
-# MAGIC > **Acesso à internet na Free Edition:** para o Databricks acessar sites externos, a conta precisa estar **verificada**. Se a primeira célula de download der erro de conexão, abra **Settings → Account → Verify** e conecte seu LinkedIn. Enquanto isso, suba os arquivos da pasta `dados/` para o volume pela interface e pule direto para a seção *Bronze*.
+# MAGIC > **Acesso à internet na Free Edition:** para o Databricks acessar sites externos, a conta precisa estar **verificada**. Se a primeira célula de download der erro de conexão, verifique a conta pelo LinkedIn quando o Databricks pedir. Enquanto isso, suba os arquivos `.parquet` da pasta `dados/` para o volume `ecommerce.bronze.arquivos`, na subpasta `landing`, pela interface, e pule direto para a seção *Bronze*.
 
 # COMMAND ----------
 
@@ -37,7 +39,7 @@ dbutils.widgets.text(
 catalogo = dbutils.widgets.get("catalogo")
 url_base = dbutils.widgets.get("url_base")
 
-pasta_landing = f"/Volumes/{catalogo}/raw/arquivos/landing"
+pasta_landing = f"/Volumes/{catalogo}/bronze/arquivos/landing"
 print(f"Catálogo: {catalogo}")
 print(f"Origem:   {url_base}")
 print(f"Landing:  {pasta_landing}")
@@ -52,9 +54,9 @@ print(f"Landing:  {pasta_landing}")
 # COMMAND ----------
 
 spark.sql(f"CREATE CATALOG IF NOT EXISTS {catalogo}")
-for schema in ["raw", "bronze", "silver", "gold"]:
+for schema in ["bronze", "silver", "gold"]:
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {catalogo}.{schema}")
-spark.sql(f"CREATE VOLUME IF NOT EXISTS {catalogo}.raw.arquivos")
+spark.sql(f"CREATE VOLUME IF NOT EXISTS {catalogo}.bronze.arquivos")
 
 dbutils.fs.mkdirs(pasta_landing)
 

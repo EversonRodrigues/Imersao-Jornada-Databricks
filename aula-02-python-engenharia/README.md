@@ -126,7 +126,7 @@ Se a `silver` falhar, a `gold` nem começa, e ninguém vê número errado. O Job
 
 A Free Edition só acessa sites externos com a conta **verificada**. Se a célula de download der erro de conexão (`ConnectionError`, `Max retries exceeded`), verifique a conta pelo LinkedIn quando o Databricks pedir.
 
-**Enquanto a verificação não sai**, dá para seguir a aula: suba os 4 arquivos `.parquet` da pasta [`dados/`](../dados/) para `/Volumes/ecommerce/raw/arquivos/landing/` pela interface (**Catalog → ecommerce → raw → arquivos → Upload**) e comece na seção *Bronze* do notebook. A API do IBGE fica para depois da verificação.
+**Enquanto a verificação não sai**, dá para seguir a aula: suba os 4 arquivos `.parquet` da pasta [`dados/`](../dados/) para `/Volumes/ecommerce/bronze/arquivos/landing/` pela interface (**Catalog → ecommerce → bronze → arquivos → Upload**) e comece na seção *Bronze* do notebook. A API do IBGE fica para depois da verificação.
 
 ### 1. Ingestão → bronze
 
