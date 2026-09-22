@@ -42,7 +42,7 @@ Cada aula tem um README com a **base teórica** (o porquê de cada coisa), o **p
 ```mermaid
 flowchart LR
     subgraph Fontes
-        GH[Data lake<br/>Parquet no GitHub]
+        GH[Data lake<br/>Storage do Supabase<br/>Parquet via S3]
         API[API do IBGE<br/>JSON]
         CSV[CSVs<br/>upload manual<br/>Aula 1]
     end

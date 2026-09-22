@@ -18,6 +18,12 @@ resources:
           default: ${var.catalogo}
         - name: origem
           default: ${var.origem}
+        - name: s3_endpoint
+          default: ${var.s3_endpoint}
+        - name: s3_bucket
+          default: ${var.s3_bucket}
+        - name: s3_region
+          default: ${var.s3_region}
         - name: url_base
           default: ${var.url_base}
 

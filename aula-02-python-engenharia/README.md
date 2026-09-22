@@ -1,6 +1,6 @@
 # Aula 2: Python & Engenharia de Dados
 
-> **Objetivo do dia:** tirar o dado do **banco de produção** (Postgres no Supabase, rodando na AWS) e fazer ele chegar sozinho no Databricks, organizado em bronze → silver → gold, todo dia às 6h.
+> **Objetivo do dia:** tirar o dado do **data lake** (o Storage do Supabase, que fala o protocolo S3 da AWS) e fazer ele chegar sozinho no Databricks, organizado em bronze → silver → gold, todo dia às 6h.
 
 | | |
 |---|---|
@@ -13,9 +13,9 @@
 
 | Bloco | Tempo | O que acontece |
 |---|---|---|
-| Esquenta de Python | 20 min | Variáveis, listas, dicionários, `for`, funções, `requests`, `boto3`, SQLAlchemy |
-| Teoria | 15 min | Banco transacional × analítico, ETL, medalhão, pooler de conexão |
-| Supabase → bronze | 25 min | Apagar o trabalho manual da Aula 1 e trazer o dado do banco |
+| Esquenta de Python | 20 min | Variáveis, listas, dicionários, `for`, funções, `requests` e `boto3` |
+| Teoria | 15 min | Data lake, protocolo S3, ETL, arquitetura medalhão |
+| Data lake → bronze | 25 min | Apagar o trabalho manual da Aula 1 e trazer os arquivos do storage |
 | Silver | 20 min | Limpar, tipar, enriquecer e marcar problemas |
 | Gold | 15 min | As visões de negócio, com `CASE WHEN` e window functions |
 | Job | 10 min | Agendar o pipeline para rodar sozinho |
@@ -28,24 +28,65 @@
 
 Você arrastou 4 arquivos CSV e respondeu os diretores. Funciona uma vez. Numa empresa de verdade:
 
-- o dado **não está em CSV**: está no banco do sistema que roda a operação;
+- o dado **não está no seu computador**: está no storage da nuvem, exportado pelos sistemas;
 - chega dado novo **o tempo todo**;
 - alguém precisa garantir que o número do dashboard de amanhã está certo **sem ninguém olhar**.
 
 Resolver isso é o trabalho da **engenharia de dados**.
 
-### Banco transacional × banco analítico
+### Onde o dado mora numa empresa
 
-O e-commerce roda em um **Postgres** hospedado no Supabase. É um banco **transacional** (OLTP): feito para gravar e ler poucas linhas por vez, muito rápido, milhares de vezes por segundo.
+O sistema que roda a operação (o e-commerce, o ERP, o CRM) guarda tudo em um banco **transacional**: feito para gravar e ler poucas linhas por vez, muito rápido, milhares de vezes por segundo. Ninguém deixa um analista rodar `GROUP BY` em 10 milhões de linhas ali, porque a consulta pesada competiria com as compras acontecendo no site. É assim que um relatório derruba a loja.
 
-| | Transacional (OLTP) · Postgres | Analítico (OLAP) · Databricks |
+A saída é o **data lake**: os sistemas exportam arquivos para um storage barato na nuvem, e a plataforma analítica lê de lá. Cada um faz o que faz bem.
+
+```
+ sistema (banco transacional) ──exporta──► data lake (arquivos) ──lê──► Databricks (análise)
+```
+
+### Object storage e o protocolo S3
+
+O **S3** (*Simple Storage Service*) é o serviço de arquivos da AWS, e virou o padrão do mercado: quase todo storage na nuvem hoje aceita o mesmo protocolo, inclusive o **Storage do Supabase**, que é o nosso data lake. O vocabulário é curto:
+
+| Termo | O que é | Aqui |
 |---|---|---|
-| Pergunta típica | "Qual o pedido 8f3a?" | "Qual a receita por categoria nos últimos 30 dias?" |
-| Lê | Poucas linhas, muitas vezes | Milhões de linhas, poucas vezes |
-| Organização | Por linha | Por coluna |
-| Otimizado para | Velocidade de gravação | Velocidade de agregação |
+| **Bucket** | A pasta raiz, o "balde" | `ecommerce` |
+| **Key** | O caminho do arquivo dentro do bucket | `vendas.parquet` |
+| **Endpoint** | O endereço do serviço | `https://<ref>.storage.supabase.co/storage/v1/s3` |
+| **Access key / secret** | Usuário e senha da máquina | *Project Settings → Storage → S3 access keys* |
 
-**Por que não deixar o diretor consultar o Postgres direto?** Porque uma consulta analítica pesada (um `GROUP BY` em 10 milhões de linhas) compete com as compras acontecendo no site. É assim que um relatório derruba a loja. Por isso copiamos o dado para a plataforma analítica: cada um faz o que faz bem.
+Não é um sistema de arquivos como o do seu computador: não existe "pasta" de verdade, e um arquivo não é alterado no meio. Você grava o objeto inteiro e lê o objeto inteiro. Isso é o que deixa o storage barato e praticamente infinito.
+
+### boto3: a biblioteca de S3
+
+```python
+import boto3
+
+s3 = boto3.client(
+    "s3",
+    endpoint_url="https://<ref>.storage.supabase.co/storage/v1/s3",
+    region_name="us-east-2",
+    aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
+    aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
+)
+
+s3.list_objects_v2(Bucket="ecommerce")            # o que existe no bucket
+s3.get_object(Bucket="ecommerce", Key="vendas.parquet")   # baixar um arquivo
+```
+
+O `boto3` é da AWS, mas o `endpoint_url` faz ele falar com qualquer storage compatível. O código que você escreve hoje funciona igual na Amazon.
+
+### Credencial não vai no notebook
+
+Notebook vai para o Git, e credencial em repositório é incidente de segurança. Guarde no **secret scope** do Databricks:
+
+```bash
+databricks secrets create-scope imersao
+databricks secrets put-secret imersao s3_key
+databricks secrets put-secret imersao s3_secret
+```
+
+No notebook, `dbutils.secrets.get("imersao", "s3_key")` lê o valor, e o Databricks troca o segredo por `[REDACTED]` em qualquer saída impressa.
 
 ### ETL e ELT
 
@@ -60,7 +101,7 @@ Em um lakehouse o padrão é **ELT**: primeiro guardamos o dado bruto (é barato
 
 ```
  Origem ──► BRONZE ──────────► SILVER ─────────────► GOLD
- Postgres   como chegou        limpo e confiável      pronto para o negócio
+ data lake  como chegou        limpo e confiável      pronto para o negócio
  + API      + quando chegou    tipos certos           uma tabela por pergunta
             + de onde veio     sem duplicatas         regras de negócio
                                problemas marcados
@@ -72,62 +113,15 @@ Em um lakehouse o padrão é **ELT**: primeiro guardamos o dado bruto (é barato
 | **Silver** | "Posso confiar neste dado?" | Preço em `DECIMAL`, datas convertidas, receita calculada, região do cliente, flag de produto não cadastrado |
 | **Gold** | "Qual a resposta para o diretor?" | `vendas_temporais`, `vendas_produtos`, `clientes_segmentacao`, `precos_competitividade` |
 
-**Por que não fazer tudo de uma vez?** Porque, quando algo der errado (e vai dar), você sabe em qual camada procurar e reprocessa a partir da bronze, sem voltar a incomodar o banco de produção.
+**Por que não fazer tudo de uma vez?** Porque, quando algo der errado (e vai dar), você sabe em qual camada procurar e reprocessa a partir da bronze, sem precisar baixar tudo da origem de novo.
 
 ### Idempotência
 
 Um pipeline é **idempotente** quando rodá-lo duas vezes dá o mesmo resultado que rodá-lo uma. Isso permite reexecutar sem medo depois de uma falha. No código isso aparece como `CREATE ... IF NOT EXISTS` para a estrutura e `mode("overwrite")` para os dados.
 
-### Como o Python conversa com o Postgres
-
-Três peças, nesta ordem:
-
-| Peça | Papel |
-|---|---|
-| **Driver** (`psycopg2`) | Fala a língua do Postgres |
-| **SQLAlchemy** (`create_engine`) | Cria a conexão reutilizável, a *engine* |
-| **pandas** (`read_sql`) | Executa o SQL pela engine e devolve um DataFrame |
-
-```python
-from sqlalchemy import create_engine
-import pandas as pd
-
-engine = create_engine(uri, pool_pre_ping=True)
-df = pd.read_sql("SELECT * FROM vendas", engine)
-```
-
-### Os três modos de conexão do Supabase
-
-Na tela **Connect** do Supabase aparecem três opções. A escolha não é detalhe:
-
-| Modo | Porta | Quando usar |
-|---|---|---|
-| **Session pooler** | 5432 | **O nosso caso.** Funciona em rede IPv4, que é a do Databricks serverless, e se dá bem com o driver do Postgres |
-| Transaction pooler | 6543 | Funções serverless de vida muito curta; pode atrapalhar drivers que usam *prepared statements* |
-| Direct connection | 5432 | Servidor fixo com IPv6, ou com o add-on pago de IPv4 |
-
-Um **pooler** é um porteiro de conexões: em vez de cada cliente abrir uma conexão nova com o banco (caro), ele mantém um conjunto de conexões prontas e empresta. Sem isso, um punhado de processos derruba um Postgres pequeno.
-
-A URI do Session pooler:
-
-```
-postgresql+psycopg2://postgres.<ref>:<senha>@aws-0-<regiao>.pooler.supabase.com:5432/postgres?sslmode=require
-```
-
-### Senha não vai no notebook
-
-Notebook vai para o Git, e senha em repositório é incidente de segurança. Guarde no **secret scope** do Databricks:
-
-```bash
-databricks secrets create-scope imersao
-databricks secrets put-secret imersao supabase_uri
-```
-
-No notebook, `dbutils.secrets.get("imersao", "supabase_uri")` lê o valor, e o Databricks troca o segredo por `[REDACTED]` em qualquer saída impressa.
-
 ### Por que guardar uma cópia em Parquet
 
-Antes de transformar, o pipeline grava no volume uma cópia fiel do que veio do banco, em **Parquet**: formato colunar, comprimido e que guarda os tipos.
+Os arquivos do data lake já são **Parquet**: formato colunar, comprimido e que guarda os tipos. Antes de transformar, o pipeline copia cada um para o volume, sem alterar nada.
 
 | | CSV | Parquet |
 |---|---|---|
@@ -135,7 +129,7 @@ Antes de transformar, o pipeline grava no volume uma cópia fiel do que veio do 
 | Tamanho (`vendas`) | 272 KB | 70 KB |
 | Leitura de poucas colunas | Lê o arquivo inteiro | Lê só as colunas pedidas |
 
-Com essa cópia, reprocessar não exige tocar de novo no banco de produção.
+Com essa cópia no volume, reprocessar não exige baixar tudo de novo da origem.
 
 ### Spark e PySpark
 
@@ -145,7 +139,7 @@ O **Apache Spark** processa dados distribuindo o trabalho entre várias máquina
 2. **Transformações são preguiçosas:** `withColumn`, `join` e `filter` só montam um plano; nada roda até uma **ação** (`count`, `display`, `saveAsTable`).
 3. **SQL e PySpark são o mesmo motor:** escolha o que deixa o código mais claro.
 
-> **pandas ou PySpark?** O pandas trabalha na memória de uma máquina e é ótimo para os milhares de linhas que vêm do Postgres. O PySpark escala para bilhões. Aqui usamos pandas na ingestão e PySpark da bronze em diante, que é o caminho natural quando o volume cresce.
+> **pandas ou PySpark?** O pandas trabalha na memória de uma máquina e é ótimo para inspecionar o arquivo que acabou de chegar. O PySpark escala para bilhões. Aqui usamos pandas na ingestão e PySpark da bronze em diante, que é o caminho natural quando o volume cresce.
 
 ### Serverless e Jobs
 
@@ -165,28 +159,30 @@ Se a silver falhar, a gold nem começa, e ninguém vê número errado. O Job rod
 
 **Acesso à internet.** A Free Edition só acessa serviços externos com a conta **verificada**. Se a conexão falhar (`ConnectionError`, `Max retries exceeded`), verifique a conta pelo LinkedIn quando o Databricks pedir.
 
-**O banco de origem.** Você precisa de um Postgres com as 4 tabelas (`vendas`, `produtos`, `clientes`, `preco_competidores`). No Supabase:
+**O data lake.** Você precisa de um bucket com os 4 arquivos Parquet (`vendas`, `produtos`, `clientes` e `preco_competidores`), que estão na pasta [`dados/`](../dados/). No Supabase:
 
-1. Crie um projeto (ou use um existente) e anote a senha do banco.
-2. Carregue os dados da pasta [`dados/`](../dados/) nas 4 tabelas (pelo **Table Editor → Import data from CSV**).
-3. Em **Connect**, copie a URI do **Session pooler** e troque `[YOUR-PASSWORD]` pela senha real.
-4. Guarde a URI no segredo do Databricks:
+1. **Storage → New bucket**, nome `ecommerce`.
+2. Faça upload dos 4 arquivos `.parquet`.
+3. **Project Settings → Storage → S3 access keys → New access key**. Guarde as duas partes.
+4. Anote o endpoint, que aparece na mesma tela: `https://<ref>.storage.supabase.co/storage/v1/s3`.
+5. Guarde as chaves no Databricks:
    ```bash
    databricks secrets create-scope imersao
-   databricks secrets put-secret imersao supabase_uri
+   databricks secrets put-secret imersao s3_key
+   databricks secrets put-secret imersao s3_secret
    ```
 
-> **Plano B:** se o banco não estiver pronto (ou cair no meio da aula), mude o widget `origem` para `arquivos`. O notebook passa a ler os mesmos dados em Parquet, direto do repositório, e a aula continua sem interrupção.
+> **Plano B:** se o storage não estiver pronto (ou cair no meio da aula), mude o widget `origem` para `arquivos`. O notebook passa a baixar os mesmos Parquet do repositório, e a aula continua sem interrupção.
 
 ### 1. Esquenta de Python (20 min)
 
-Abra [`00_esquenta_python.py`](./00_esquenta_python.py) e resolva os 10 exercícios: variáveis, listas, dicionários, `for`, `if`, funções, `requests` com a API do IBGE, pandas, `boto3` no Storage do Supabase e SQLAlchemy. As respostas comentadas estão no [gabarito](./00_esquenta_python_gabarito.py).
+Abra [`00_esquenta_python.py`](./00_esquenta_python.py) e resolva os 10 exercícios: variáveis, listas, dicionários, `for`, `if`, funções, `requests` com a API do IBGE, pandas, `boto3` no Storage do Supabase e escrita de arquivos no volume. As respostas comentadas estão no [gabarito](./00_esquenta_python_gabarito.py).
 
-### 2. Supabase → bronze
+### 2. Data lake → bronze
 
 Abra [`01_ingestao_bronze.py`](./01_ingestao_bronze.py), conecte em **Serverless** e rode célula por célula.
 
-O notebook começa **apagando** as tabelas que você subiu na mão na Aula 1. É proposital: no fim, elas voltam vindas do banco, com a marca de quando e de onde chegaram.
+O notebook começa **apagando** as tabelas que você subiu na mão na Aula 1. É proposital: no fim, elas voltam vindas do data lake, com a marca de quando e de onde chegaram.
 
 No fim, a conferência deve mostrar:
 
@@ -224,7 +220,7 @@ Rode [`03_gold.sql`](./03_gold.sql). A última célula faz a **reconciliação**
 2. Tarefa `ingestao_bronze`: notebook `01_ingestao_bronze`, compute **Serverless**.
 3. **+ Add task** `silver` (notebook `02_silver`), dependendo de `ingestao_bronze`.
 4. **+ Add task** `gold` (notebook `03_gold`), dependendo de `silver`.
-5. Em **Job parameters**: `catalogo` = `ecommerce` e `origem` = `supabase`.
+5. Em **Job parameters**: `catalogo` = `ecommerce`, `origem` = `supabase`, `s3_endpoint`, `s3_bucket` e `s3_region`.
 6. **Schedules & Triggers → Scheduled**: todo dia às 06:00, fuso `America/Sao_Paulo`.
 7. Em **Notifications**, coloque seu e-mail para falhas.
 8. **Run now** e acompanhe o grafo ficar verde.
@@ -237,11 +233,12 @@ Rode [`03_gold.sql`](./03_gold.sql). A última célula faz a **reconciliação**
 
 | Erro | Causa | Como resolver |
 |---|---|---|
-| `OperationalError: could not translate host name` | URI errada ou incompleta | Copie de novo em **Connect → Session pooler** |
-| `OperationalError: connection timed out` | Modo **Direct connection** em rede IPv4 | Use o **Session pooler** |
-| `FATAL: password authentication failed` | Senha errada na URI | O usuário do pooler é `postgres.<ref>`, e não `postgres` |
-| `ModuleNotFoundError: psycopg2` | Faltou instalar o driver | Rode a célula `%pip install sqlalchemy psycopg2-binary` |
-| `ValueError: Sem URI do Supabase` | Widget e segredo vazios | Preencha o widget ou crie o segredo `imersao/supabase_uri` |
+| `EndpointConnectionError` | Endpoint errado ou sem internet | Confira o endereço do Storage e a verificação da conta |
+| `InvalidAccessKeyId` / `SignatureDoesNotMatch` | Chave ou segredo errados | Recrie a chave no Supabase e atualize o secret scope |
+| `NoSuchBucket` | Nome do bucket errado | Confira o widget `s3_bucket` |
+| `KeyError: 'Contents'` | Bucket vazio | Faça o upload dos 4 Parquet |
+| `NoSuchKey` | Nome do arquivo diferente | Os arquivos precisam se chamar `vendas.parquet`, `produtos.parquet`… |
+| `ValueError: Preencha o widget s3_endpoint` | Widget vazio | Preencha o endpoint ou use `origem = arquivos` |
 | `ConnectionError` na API do IBGE | Conta não verificada | Verifique pelo LinkedIn; enquanto isso, use `origem = arquivos` |
 | `TABLE_OR_VIEW_NOT_FOUND: silver.vendas` | Rodou a gold antes da silver | Rode os notebooks na ordem |
 | Receita da gold diferente da silver | Algum `JOIN` perdeu ou duplicou vendas | Compare com as consultas originais |
@@ -250,10 +247,10 @@ Rode [`03_gold.sql`](./03_gold.sql). A última célula faz a **reconciliação**
 
 ## Para praticar
 
-1. Leia do Postgres só as vendas dos últimos 7 dias, em vez da tabela inteira (`WHERE data_venda >= ...`). É o começo da **carga incremental**.
+1. Baixe só os arquivos que mudaram desde a última execução, comparando o `LastModified` que o `list_objects_v2` devolve. É o começo da **carga incremental**.
 2. Acrescente à silver uma coluna `faixa_horaria` (madrugada, manhã, tarde e noite) e leve para a gold.
 3. Consuma outra API pública (por exemplo, a cotação do dólar em `economia.awesomeapi.com.br`) e grave na bronze.
-4. Use o `boto3` do esquenta para ler um arquivo do Storage do Supabase e gravá-lo na bronze.
+4. Use o `put_object` do `boto3` para devolver ao bucket um arquivo gerado por você, por exemplo a gold em Parquet.
 
 ## Amanhã
 

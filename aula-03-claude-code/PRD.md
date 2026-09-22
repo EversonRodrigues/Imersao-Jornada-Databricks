@@ -23,13 +23,13 @@ E-commerce brasileiro com vendas em dois canais (site e loja física). Três dir
 
 | Fonte | Formato | Endereço | Conteúdo |
 |---|---|---|---|
-| Data lake | Parquet | `${url_base}/{tabela}.parquet` | `vendas`, `produtos`, `clientes`, `preco_competidores` |
+| Data lake (Storage do Supabase, protocolo S3) | Parquet | bucket `${s3_bucket}`, arquivos `{tabela}.parquet` | `vendas`, `produtos`, `clientes`, `preco_competidores` |
 | API do IBGE | JSON | `https://servicodados.ibge.gov.br/api/v1/localidades/estados` | 27 UFs com nome e região |
 
 ## 4. Camadas
 
 ### Bronze (`01_ingestao_bronze.py`, Python)
-- Copia cada arquivo da fonte para `landing/` sem alteração.
+- Baixa cada Parquet do bucket S3 com `boto3` e copia para `landing/` sem alteração. Credenciais no secret scope `imersao` (`s3_key` e `s3_secret`); o widget `origem = arquivos` é o plano B, que lê os mesmos Parquet do GitHub.
 - Grava uma tabela Delta por fonte, **sobrescrevendo**, com as colunas extras `_ingerido_em` (timestamp da carga) e `_arquivo_origem` (caminho do arquivo).
 - Cria catálogo, schemas e volume se não existirem (**idempotente**).
 

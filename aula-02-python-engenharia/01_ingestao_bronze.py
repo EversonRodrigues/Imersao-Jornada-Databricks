@@ -1,25 +1,26 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Aula 2 · Parte 1: Supabase → Bronze
+# MAGIC # Aula 2 · Parte 1: Data lake → Bronze
 # MAGIC ### "De onde vieram esses dados?"
 # MAGIC
-# MAGIC Na Aula 1 você arrastou 4 arquivos CSV para dentro do Databricks. Funciona uma vez. Mas os dados de uma
-# MAGIC empresa não moram em CSV: eles moram no **banco de dados do sistema que roda a operação**.
+# MAGIC Na Aula 1 você arrastou 4 arquivos CSV para dentro do Databricks. Funciona uma vez. Mas numa empresa os
+# MAGIC arquivos não ficam no seu computador: eles ficam em um **storage na nuvem**, e chegam lá todo dia,
+# MAGIC exportados pelos sistemas.
 # MAGIC
-# MAGIC No nosso caso, o e-commerce roda em cima de um **Postgres hospedado no Supabase (AWS)**. É de lá que os
-# MAGIC dados vão sair hoje, sozinhos.
+# MAGIC O nosso data lake é o **Storage do Supabase**, que fala o mesmo protocolo do **Amazon S3**. Ou seja: o
+# MAGIC código que você escreve hoje funciona igual na AWS, e é isso que as empresas usam.
 # MAGIC
 # MAGIC ```
-# MAGIC  Supabase (Postgres na AWS)  ─┐
-# MAGIC                               ├─► volume bronze.arquivos/landing ─► tabelas ecommerce.bronze.*
-# MAGIC  API do IBGE (JSON)          ─┘        (cópia fiel do que chegou)      (Delta + metadados)
+# MAGIC  Storage do Supabase (S3)  ─┐
+# MAGIC   vendas.parquet            ├─► volume bronze.arquivos/landing ─► tabelas ecommerce.bronze.*
+# MAGIC  API do IBGE (JSON)        ─┘      (cópia fiel do que chegou)       (Delta + metadados)
 # MAGIC ```
 # MAGIC
 # MAGIC | Etapa | O que acontece |
 # MAGIC |---|---|
 # MAGIC | 1 | Apagamos as tabelas que você subiu na mão na Aula 1 |
-# MAGIC | 2 | Conectamos no Postgres do Supabase com SQLAlchemy |
-# MAGIC | 3 | Lemos as 4 tabelas e guardamos uma cópia em Parquet no volume |
+# MAGIC | 2 | Conectamos no storage com `boto3`, a biblioteca de S3 |
+# MAGIC | 3 | Listamos e baixamos os Parquet, guardando uma cópia no volume |
 # MAGIC | 4 | Gravamos a camada bronze, com metadados de ingestão |
 # MAGIC | 5 | Enriquecemos com a API do IBGE |
 # MAGIC
@@ -36,14 +37,20 @@
 # MAGIC |---|---|
 # MAGIC | `catalogo` | Catálogo do Unity Catalog (padrão `ecommerce`) |
 # MAGIC | `origem` | `supabase` (o normal) ou `arquivos` (plano B, lê os Parquet do GitHub) |
-# MAGIC | `supabase_uri` | A connection URI. Deixe vazio para usar o segredo `imersao/supabase_uri` |
+# MAGIC | `s3_endpoint` | `https://<ref>.storage.supabase.co/storage/v1/s3` |
+# MAGIC | `s3_bucket` | Nome do bucket, por exemplo `ecommerce` |
+# MAGIC | `s3_region` | Região do projeto, por exemplo `us-east-2` |
 # MAGIC | `url_base` | Endereço dos Parquet usados pelo plano B |
+# MAGIC
+# MAGIC As **chaves de acesso** não são widget: ficam no secret scope (veja a seção 2).
 
 # COMMAND ----------
 
 dbutils.widgets.text("catalogo", "ecommerce")
 dbutils.widgets.dropdown("origem", "supabase", ["supabase", "arquivos"])
-dbutils.widgets.text("supabase_uri", "")
+dbutils.widgets.text("s3_endpoint", "")
+dbutils.widgets.text("s3_bucket", "ecommerce")
+dbutils.widgets.text("s3_region", "us-east-2")
 dbutils.widgets.text(
     "url_base",
     "https://raw.githubusercontent.com/lvgalvao/Imersao-Jornada-Databricks/main/dados",
@@ -66,7 +73,7 @@ print(f"Landing:  {pasta_landing}")
 # MAGIC ## 1. Apagando o trabalho manual da Aula 1
 # MAGIC
 # MAGIC Vamos jogar fora as tabelas que você subiu na mão. Pode apagar sem medo: no fim deste notebook elas
-# MAGIC voltam, agora vindas do banco de origem e prontas para se atualizar sozinhas todo dia.
+# MAGIC voltam, agora vindas do data lake e prontas para se atualizar sozinhas todo dia.
 # MAGIC
 # MAGIC **Essa é a diferença entre um analista e um engenheiro de dados:** o analista carrega o arquivo; o
 # MAGIC engenheiro constrói o caminho por onde o arquivo passa sozinho.
@@ -87,136 +94,149 @@ display(spark.sql(f"SHOW TABLES IN {catalogo}.bronze"))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 2. Conectando no Postgres do Supabase
+# MAGIC ## 2. Conectando no data lake com boto3
 # MAGIC
-# MAGIC Precisamos de duas bibliotecas: o **SQLAlchemy**, que cria a conexão, e o **psycopg2**, que é o driver
-# MAGIC que fala a língua do Postgres.
-
-# COMMAND ----------
-
-# MAGIC %pip install --quiet sqlalchemy psycopg2-binary
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### A connection URI
+# MAGIC **S3** (*Simple Storage Service*) é o serviço de arquivos da AWS, e virou o padrão do mercado: quase todo
+# MAGIC storage na nuvem hoje aceita o mesmo protocolo. O Storage do Supabase é um deles.
 # MAGIC
-# MAGIC No Supabase, em **Connect**, existem três modos de conexão. A escolha importa:
+# MAGIC O vocabulário é curto:
 # MAGIC
-# MAGIC | Modo | Porta | Quando usar |
+# MAGIC | Termo | O que é | Aqui |
 # MAGIC |---|---|---|
-# MAGIC | **Session pooler** | 5432 | **O nosso caso.** Funciona em rede IPv4, que é a do Databricks serverless |
-# MAGIC | Transaction pooler | 6543 | Funções serverless de vida muito curta; pode atrapalhar drivers que usam *prepared statements* |
-# MAGIC | Direct connection | 5432 | Servidor fixo com IPv6 (ou com o add-on pago de IPv4) |
+# MAGIC | **Bucket** | A "pasta raiz", o balde | `ecommerce` |
+# MAGIC | **Key** | O caminho do arquivo dentro do bucket | `vendas.parquet` |
+# MAGIC | **Endpoint** | O endereço do serviço | `https://<ref>.storage.supabase.co/storage/v1/s3` |
+# MAGIC | **Access key / secret** | Usuário e senha da máquina | Criados em *Project Settings → Storage → S3 access keys* |
 # MAGIC
-# MAGIC A URI do Session pooler tem este formato:
+# MAGIC A biblioteca **`boto3`** é a da AWS. Mudando o `endpoint_url`, ela fala com qualquer storage compatível.
 # MAGIC
-# MAGIC ```
-# MAGIC postgresql+psycopg2://postgres.<ref>:<senha>@aws-0-<regiao>.pooler.supabase.com:5432/postgres?sslmode=require
-# MAGIC ```
-# MAGIC
-# MAGIC > **Nunca cole a senha no notebook.** Notebook vai para o Git, e senha em repositório é incidente de
-# MAGIC > segurança. Guarde no **secret scope** do Databricks, pela CLI:
+# MAGIC > **Nunca cole chave de acesso no notebook.** Notebook vai para o Git, e credencial em repositório é
+# MAGIC > incidente de segurança. Guarde no **secret scope** do Databricks, pela CLI:
 # MAGIC >
 # MAGIC > ```bash
 # MAGIC > databricks secrets create-scope imersao
-# MAGIC > databricks secrets put-secret imersao supabase_uri
+# MAGIC > databricks secrets put-secret imersao s3_key
+# MAGIC > databricks secrets put-secret imersao s3_secret
 # MAGIC > ```
 # MAGIC >
-# MAGIC > O `dbutils.secrets.get` lê o valor, e o Databricks substitui o segredo por `[REDACTED]` em qualquer
-# MAGIC > saída impressa.
+# MAGIC > O `dbutils.secrets.get` lê o valor, e o Databricks troca o segredo por `[REDACTED]` em qualquer saída
+# MAGIC > impressa.
 
 # COMMAND ----------
 
-def obter_uri() -> str:
-    """Pega a URI do widget; se estiver vazio, tenta o segredo."""
-    uri = dbutils.widgets.get("supabase_uri")
-    if uri:
-        return uri
-    try:
-        return dbutils.secrets.get("imersao", "supabase_uri")
-    except Exception:
-        return ""
+import boto3
 
-
-engine = None
+s3 = None
 if origem == "supabase":
-    from sqlalchemy import create_engine
-
-    uri = obter_uri()
-    if not uri:
+    endpoint = dbutils.widgets.get("s3_endpoint")
+    if not endpoint:
         raise ValueError(
-            "Sem URI do Supabase. Preencha o widget supabase_uri, crie o segredo imersao/supabase_uri "
+            "Preencha o widget s3_endpoint (https://<ref>.storage.supabase.co/storage/v1/s3) "
             "ou mude o widget origem para 'arquivos'."
         )
-    engine = create_engine(uri, pool_pre_ping=True)
-    print("Engine criada.")
+
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=endpoint,
+        region_name=dbutils.widgets.get("s3_region"),
+        aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
+        aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
+    )
+    print("Cliente S3 criado.")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Testando a conexão antes de confiar nela
+# MAGIC ### O que existe no bucket?
 # MAGIC
-# MAGIC Todo pipeline que fala com um sistema externo deveria começar com um teste barato. Se o `SELECT 1` não
-# MAGIC responde, o problema é de conexão, e não do seu código.
+# MAGIC Todo pipeline que fala com um sistema externo deveria começar com um teste barato. Se a listagem responde,
+# MAGIC a conexão e as credenciais estão certas, e qualquer erro daqui para frente é do seu código.
+# MAGIC
+# MAGIC A resposta do `list_objects_v2` é um dicionário. Os arquivos ficam na chave `Contents`, que é uma lista de
+# MAGIC dicionários, um por arquivo, com `Key` (o nome) e `Size` (o tamanho em bytes).
 
 # COMMAND ----------
 
+bucket = dbutils.widgets.get("s3_bucket")
+
+if s3 is not None:
+    resposta = s3.list_objects_v2(Bucket=bucket)
+
+    for objeto in resposta.get("Contents", []):
+        print(f"{objeto['Key']:<30} {objeto['Size']:>10,} bytes")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 3. Baixando um arquivo
+# MAGIC
+# MAGIC Começamos com **um** arquivo, para entender cada passo. O `get_object` devolve outro dicionário; o
+# MAGIC conteúdo do arquivo está em `Body`, e o `.read()` transforma em **bytes**.
+# MAGIC
+# MAGIC Esses bytes vão direto para o volume, **sem nenhuma alteração**. Se amanhã a transformação tiver um bug, o
+# MAGIC arquivo original continua lá para reprocessar, e você não precisa incomodar o sistema de origem.
+
+# COMMAND ----------
+
+def baixar_do_s3(nome_arquivo: str) -> bytes:
+    """Baixa um arquivo do bucket e devolve os bytes."""
+    objeto = s3.get_object(Bucket=bucket, Key=nome_arquivo)
+    return objeto["Body"].read()
+
+
+def baixar_do_github(nome_arquivo: str) -> bytes:
+    """Plano B: baixa o mesmo arquivo publicado no repositório."""
+    import requests
+
+    resposta = requests.get(f"{url_base}/{nome_arquivo}", timeout=60)
+    resposta.raise_for_status()
+    return resposta.content
+
+
+def baixar(nome_arquivo: str) -> bytes:
+    return baixar_do_s3(nome_arquivo) if origem == "supabase" else baixar_do_github(nome_arquivo)
+
+
+conteudo = baixar("vendas.parquet")
+print(f"{len(conteudo):,} bytes baixados")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Olhando o que veio, antes de gravar
+# MAGIC
+# MAGIC O pandas espera um arquivo, e o que temos são bytes na memória. O `io.BytesIO` finge ser um arquivo para
+# MAGIC o pandas conseguir ler.
+
+# COMMAND ----------
+
+import io
 import pandas as pd
 
-if engine is not None:
-    display(pd.read_sql("SELECT 1 AS conexao_ok", engine))
+df_vendas = pd.read_parquet(io.BytesIO(conteudo))
 
-    # quais tabelas existem no banco de origem?
-    tabelas_no_banco = pd.read_sql(
-        "SELECT table_name FROM information_schema.tables "
-        "WHERE table_schema = 'public' ORDER BY table_name",
-        engine,
-    )
-    display(tabelas_no_banco)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## 3. Lendo uma tabela e guardando o original
-# MAGIC
-# MAGIC Começamos com **uma** tabela, para entender cada passo. O `pandas` executa o SQL pela engine e devolve um
-# MAGIC DataFrame.
-# MAGIC
-# MAGIC Antes de transformar qualquer coisa, gravamos uma cópia fiel em **Parquet** no volume (a pasta *landing*).
-# MAGIC Se amanhã a transformação tiver um bug, o dado original continua lá, e você reprocessa sem incomodar o
-# MAGIC banco de produção.
-
-# COMMAND ----------
-
-def ler_do_supabase(tabela: str) -> pd.DataFrame:
-    """Lê a tabela inteira do Postgres e devolve um DataFrame do pandas."""
-    return pd.read_sql(f"SELECT * FROM {tabela}", engine)
-
-
-def ler_do_github(tabela: str) -> pd.DataFrame:
-    """Plano B: lê o Parquet publicado no repositório."""
-    return pd.read_parquet(f"{url_base}/{tabela}.parquet")
-
-
-def ler_origem(tabela: str) -> pd.DataFrame:
-    return ler_do_supabase(tabela) if origem == "supabase" else ler_do_github(tabela)
-
-
-df_vendas = ler_origem("vendas")
 print(f"{len(df_vendas):,} linhas · colunas: {list(df_vendas.columns)}")
 display(df_vendas.head())
 
 # COMMAND ----------
 
-def guardar_no_landing(df: pd.DataFrame, tabela: str) -> str:
-    """Grava a cópia bruta em Parquet no volume e devolve o caminho."""
-    destino = f"{pasta_landing}/{tabela}.parquet"
-    df.to_parquet(destino, index=False)
+# MAGIC %md
+# MAGIC ### Gravando a cópia no volume (a pasta *landing*)
+# MAGIC
+# MAGIC Escrever bytes no volume é igual a escrever qualquer arquivo em Python: `open(caminho, "wb")`, onde o
+# MAGIC `"wb"` quer dizer *write binary*.
+
+# COMMAND ----------
+
+def guardar_no_landing(conteudo: bytes, nome_arquivo: str) -> str:
+    """Grava os bytes recebidos no volume, sem alterar nada. Devolve o caminho."""
+    destino = f"{pasta_landing}/{nome_arquivo}"
+    with open(destino, "wb") as arquivo:
+        arquivo.write(conteudo)
     return destino
 
 
-print(guardar_no_landing(df_vendas, "vendas"))
+print(guardar_no_landing(conteudo, "vendas.parquet"))
 display(dbutils.fs.ls(pasta_landing))
 
 # COMMAND ----------
@@ -224,7 +244,7 @@ display(dbutils.fs.ls(pasta_landing))
 # MAGIC %md
 # MAGIC ## 4. Bronze: do arquivo para a tabela Delta
 # MAGIC
-# MAGIC A bronze guarda o dado **como chegou**, mais duas colunas de controle que o dado original não tem:
+# MAGIC A bronze guarda o dado **como chegou**, mais duas colunas de controle que o arquivo original não tem:
 # MAGIC
 # MAGIC - `_ingerido_em`: quando o dado entrou;
 # MAGIC - `_origem`: de onde ele veio.
@@ -257,14 +277,14 @@ print(f"{catalogo}.bronze.vendas: {gravar_bronze('vendas'):,} linhas")
 # MAGIC %md
 # MAGIC ## 5. Repetindo para as 4 tabelas
 # MAGIC
-# MAGIC E se fossem 4, 10 ou 100 tabelas? Copiar o bloco acima 100 vezes é pedir para errar. O `for` que você
+# MAGIC E se fossem 4, 10 ou 100 arquivos? Copiar o bloco acima 100 vezes é pedir para errar. O `for` que você
 # MAGIC treinou no esquenta repete o mesmo caminho para cada tabela.
 
 # COMMAND ----------
 
 for tabela in TABELAS:
-    df = ler_origem(tabela)
-    guardar_no_landing(df, tabela)
+    conteudo = baixar(f"{tabela}.parquet")
+    guardar_no_landing(conteudo, f"{tabela}.parquet")
     linhas = gravar_bronze(tabela)
     print(f"✅ {tabela:<20} {linhas:>6,} linhas")
 
@@ -274,9 +294,10 @@ for tabela in TABELAS:
 # MAGIC ## 6. Uma fonte a mais: a API do IBGE
 # MAGIC
 # MAGIC A Diretora de Customer Success pediu a visão **por região**, mas o cadastro de clientes só tem a UF.
-# MAGIC Nenhum banco interno resolve isso: o dado está fora da empresa.
+# MAGIC Nenhum arquivo interno resolve isso: o dado está fora da empresa.
 # MAGIC
-# MAGIC A API pública do IBGE devolve os 27 estados com a sua região, em JSON.
+# MAGIC A API pública do IBGE devolve os 27 estados com a sua região, em JSON. Repare que o padrão é o mesmo do
+# MAGIC S3: buscar na origem, guardar no landing, gravar na bronze.
 
 # COMMAND ----------
 
@@ -341,6 +362,6 @@ display(spark.sql(conferencia))
 # MAGIC - Uma ingestão que **não depende de ninguém arrastar arquivo**.
 # MAGIC - Uma cópia fiel do que chegou, guardada no volume, para reprocessar quando precisar.
 # MAGIC - Metadados que respondem "de quando é esse dado?".
-# MAGIC - Duas fontes diferentes (um banco e uma API) no mesmo formato de saída.
+# MAGIC - Duas fontes diferentes (um data lake S3 e uma API) no mesmo formato de saída.
 # MAGIC
 # MAGIC **Próximo passo:** `02_silver.py` limpa, padroniza e enriquece esses dados.

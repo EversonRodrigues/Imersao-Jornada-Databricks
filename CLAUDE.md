@@ -9,7 +9,7 @@ Imersão Jornada de Dados: e-commerce brasileiro no Databricks Free Edition, em 
 ## Estrutura
 
 - `aula-01-sql-dashboard/`: notebooks da Aula 1 (os CSVs sobem pela interface direto em `ecommerce.bronze.*`) e dashboard sobre a bronze. A partir da Aula 2, o Job sobrescreve essas tabelas bronze, agora com metadados de ingestão.
-- `aula-02-python-engenharia/`: `01_ingestao_bronze.py` → `02_silver.py` → `03_gold.sql`.
+- `aula-02-python-engenharia/`: esquenta de Python (exercícios e gabarito) e o pipeline `01_ingestao_bronze.py` (Storage do Supabase via boto3, protocolo S3) → `02_silver.py` → `03_gold.sql`.
 - `aula-03-claude-code/`: PRD, testes de qualidade (`testes/04_testes_qualidade.py`) e dashboard sobre `gold`.
 - `aula-04-genie/`: comentários das tabelas gold e o Genie space (`genie/diretoria_ecommerce.geniespace.json`).
 - `resources/`: Job, dashboards e Genie em YAML. Caminhos relativos começam com `../`.

@@ -87,7 +87,7 @@ print(estado["regiao"]["nome"])
 tabelas = ["vendas", "produtos", "clientes", "preco_competidores"]
 
 for tabela in tabelas:
-    print(f"Lendo a tabela {tabela} do Supabase...")
+    print(f"Baixando {tabela}.parquet do data lake...")
 
 # COMMAND ----------
 
@@ -194,106 +194,98 @@ display(df_estados[df_estados["regiao"] == "Norte"])
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 9. boto3 com o Storage do Supabase
+# MAGIC ## 9. boto3: lendo arquivos do data lake
 # MAGIC
-# MAGIC O Storage do Supabase é compatível com o protocolo S3, então o mesmo `boto3` da AWS funciona: muda apenas
-# MAGIC o `endpoint_url`. As credenciais ficam em **Project Settings → Storage → S3 access keys**.
-# MAGIC
-# MAGIC O `io.BytesIO` existe porque o pandas espera um arquivo, e o que temos são bytes na memória: ele finge ser
-# MAGIC um arquivo para o pandas conseguir ler.
+# MAGIC O Storage do Supabase é compatível com o protocolo S3 da AWS, então o mesmo `boto3` funciona: muda apenas
+# MAGIC o `endpoint_url`. As chaves ficam em **Project Settings → Storage → S3 access keys** e são guardadas no
+# MAGIC secret scope do Databricks, nunca no notebook.
 
 # COMMAND ----------
 
 dbutils.widgets.text("s3_endpoint", "")
-dbutils.widgets.text("s3_bucket", "")
-dbutils.widgets.text("s3_key", "")
-dbutils.widgets.text("s3_secret", "")
+dbutils.widgets.text("s3_bucket", "ecommerce")
+dbutils.widgets.text("s3_region", "us-east-2")
 
 endpoint = dbutils.widgets.get("s3_endpoint")
 bucket = dbutils.widgets.get("s3_bucket")
 
 if not endpoint:
-    print("Sem credenciais: preencha os widgets para rodar esta célula.")
+    print("Sem endpoint: preencha o widget s3_endpoint para rodar esta célula.")
 else:
-    import io
     import boto3
 
     s3 = boto3.client(
         "s3",
-        endpoint_url=endpoint,                       # https://<projeto>.storage.supabase.co/storage/v1/s3
-        region_name="us-east-2",
-        aws_access_key_id=dbutils.widgets.get("s3_key"),
-        aws_secret_access_key=dbutils.widgets.get("s3_secret"),
+        endpoint_url=endpoint,                                   # https://<ref>.storage.supabase.co/storage/v1/s3
+        region_name=dbutils.widgets.get("s3_region"),
+        aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
+        aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
     )
 
-    # 1. listar os arquivos do bucket
+    # a resposta é um dicionário; os arquivos ficam na chave "Contents"
     resposta = s3.list_objects_v2(Bucket=bucket)
-    arquivos = [obj["Key"] for obj in resposta.get("Contents", [])]
-    print("arquivos no bucket:", arquivos)
 
-    # 2. baixar um arquivo
+    for objeto in resposta.get("Contents", []):
+        print(f"{objeto['Key']:<30} {objeto['Size']:>10,} bytes")
+
+    # a forma curta, com list comprehension
+    arquivos = [obj["Key"] for obj in resposta.get("Contents", [])]
+    print("\narquivos:", arquivos)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Baixando um arquivo e virando DataFrame
+# MAGIC
+# MAGIC O `get_object` devolve um dicionário; o conteúdo está em `Body`, e o `.read()` transforma em bytes. O
+# MAGIC pandas espera um arquivo, e o que temos são bytes na memória: o `io.BytesIO` finge ser um arquivo.
+
+# COMMAND ----------
+
+if endpoint:
+    import io
+
     objeto = s3.get_object(Bucket=bucket, Key="vendas.parquet")
-    conteudo = objeto["Body"].read()          # bytes brutos
+    conteudo = objeto["Body"].read()
     print(f"{len(conteudo):,} bytes baixados")
 
-    # 3. transformar os bytes em DataFrame
     df_vendas = pd.read_parquet(io.BytesIO(conteudo))
+    print(df_vendas.shape)
     display(df_vendas.head())
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 10. SQLAlchemy no Postgres do Supabase
+# MAGIC ## 10. Escrevendo bytes em arquivo
 # MAGIC
-# MAGIC A **engine** é a conexão reutilizável com o banco. O pandas recebe essa engine e executa o SQL por você.
+# MAGIC No pipeline, o arquivo baixado é guardado **sem nenhuma alteração** no volume (a pasta *landing*). Assim,
+# MAGIC se a transformação tiver um bug amanhã, você reprocessa a partir da cópia, sem voltar à origem.
 # MAGIC
-# MAGIC Formato da URI do **Session pooler** (o que funciona em rede IPv4, o caso do Databricks):
-# MAGIC
-# MAGIC ```
-# MAGIC postgresql+psycopg2://postgres.<ref>:<senha>@aws-0-<regiao>.pooler.supabase.com:5432/postgres?sslmode=require
-# MAGIC ```
-# MAGIC
-# MAGIC | Parte | O que é |
-# MAGIC |---|---|
-# MAGIC | `postgresql+psycopg2` | O banco e o driver que o SQLAlchemy usa |
-# MAGIC | `postgres.<ref>` | Usuário, com a referência do projeto |
-# MAGIC | `<senha>` | A senha do banco (guarde no segredo, nunca no notebook) |
-# MAGIC | `aws-0-<regiao>.pooler.supabase.com:5432` | Host e porta do Session pooler |
-# MAGIC | `sslmode=require` | Conexão criptografada, exigida pelo Supabase |
+# MAGIC O `"wb"` do `open` quer dizer *write binary*: escrever bytes, e não texto. O `with` fecha o arquivo
+# MAGIC sozinho no fim do bloco, mesmo se der erro no meio.
 
 # COMMAND ----------
 
-# MAGIC %pip install --quiet sqlalchemy psycopg2-binary
+pasta_landing = "/Volumes/ecommerce/bronze/arquivos/landing"
+dbutils.fs.mkdirs(pasta_landing)
 
-# COMMAND ----------
 
-dbutils.widgets.text("supabase_uri", "")
+def guardar(conteudo: bytes, nome_arquivo: str) -> str:
+    """Grava os bytes recebidos no volume e devolve o caminho."""
+    destino = f"{pasta_landing}/{nome_arquivo}"
+    with open(destino, "wb") as arquivo:
+        arquivo.write(conteudo)
+    return destino
 
-uri = dbutils.widgets.get("supabase_uri")
-if not uri:
-    try:
-        uri = dbutils.secrets.get("imersao", "supabase_uri")   # jeito seguro
-    except Exception:
-        uri = ""
 
-if not uri:
-    print("Sem URI: preencha o widget supabase_uri ou crie o segredo imersao/supabase_uri.")
-else:
-    import pandas as pd
-    from sqlalchemy import create_engine
+if endpoint:
+    caminho = guardar(conteudo, "vendas.parquet")
+    print("gravado em:", caminho)
 
-    engine = create_engine(uri, pool_pre_ping=True)
-
-    # teste de conexão: se isto responde 1, está tudo certo
-    display(pd.read_sql("SELECT 1 AS teste", engine))
-
-    # lendo dados de verdade
-    display(pd.read_sql("SELECT * FROM vendas LIMIT 5", engine))
-
-    # contando linhas de cada tabela, com o for que você treinou no exercício 4
-    for tabela in ["vendas", "produtos", "clientes", "preco_competidores"]:
-        total = pd.read_sql(f"SELECT COUNT(*) AS n FROM {tabela}", engine)["n"][0]
-        print(f"{tabela:<20} {total:>6,} linhas")
+    # conferindo: lendo de volta do volume
+    df_conferencia = pd.read_parquet(caminho)
+    print(df_conferencia.shape)
+    display(df_conferencia.head(3))
 
 # COMMAND ----------
 
@@ -305,8 +297,10 @@ else:
 # MAGIC | `IndentationError` | Faltou o recuo de 4 espaços dentro do `for`, do `if` ou da função |
 # MAGIC | `NameError: name 'x' is not defined` | A variável não existe: você rodou a célula fora de ordem |
 # MAGIC | `KeyError: 'regiao'` | A chave não existe no dicionário; confira a grafia |
+# MAGIC | `KeyError: 'Contents'` | O bucket está vazio ou o nome está errado |
 # MAGIC | `ModuleNotFoundError` | Biblioteca não instalada: rode `%pip install <nome>` |
 # MAGIC | `ConnectionError` ao chamar a API | Conta do Databricks ainda não verificada |
-# MAGIC | `OperationalError` no SQLAlchemy | URI, senha ou modo de conexão errados (use o Session pooler) |
+# MAGIC | `EndpointConnectionError` | Endpoint errado; confira o endereço do Storage |
+# MAGIC | `InvalidAccessKeyId` / `SignatureDoesNotMatch` | Chave ou segredo errados no secret scope |
 # MAGIC
 # MAGIC Pronto para o pipeline: siga para o **`01_ingestao_bronze`**.

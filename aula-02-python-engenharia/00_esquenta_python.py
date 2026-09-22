@@ -3,16 +3,16 @@
 # MAGIC # Aula 2 · Esquenta de Python
 # MAGIC ### Tudo o que você precisa saber antes do pipeline
 # MAGIC
-# MAGIC Hoje o dado vai sair de um **banco Postgres no Supabase** e chegar no Databricks. Para isso você vai usar
-# MAGIC Python em cinco situações, e este notebook treina exatamente essas cinco.
+# MAGIC Hoje o dado vai sair do **data lake** (o Storage do Supabase, que fala o protocolo S3) e chegar no
+# MAGIC Databricks. Para isso você vai usar Python em cinco situações, e este notebook treina essas cinco.
 # MAGIC
 # MAGIC | # | O que você vai treinar | Onde isso aparece na aula |
 # MAGIC |---|---|---|
-# MAGIC | 1 | Variáveis e tipos | Guardar a URL, a senha, o nome da tabela |
+# MAGIC | 1 | Variáveis e tipos | Guardar o endpoint, o bucket, o nome do arquivo |
 # MAGIC | 2 | Listas | A lista das 4 tabelas que o pipeline processa |
 # MAGIC | 3 | Dicionários | A resposta de uma API vira dicionário |
-# MAGIC | 4 | `for` e funções | Repetir a mesma ingestão para cada tabela |
-# MAGIC | 5 | Bibliotecas | `requests` (API), `boto3` (arquivos), `sqlalchemy` (banco) |
+# MAGIC | 4 | `for` e funções | Repetir a mesma ingestão para cada arquivo |
+# MAGIC | 5 | Bibliotecas | `requests` (API), `boto3` (arquivos no S3), `pandas` (tabelas) |
 # MAGIC
 # MAGIC **Como usar:** cada célula tem um objetivo e um espaço para você escrever. Tente sozinho primeiro. O
 # MAGIC notebook `00_esquenta_python_gabarito` tem todas as respostas comentadas.
@@ -119,7 +119,7 @@ estado = {"sigla": "AM", "nome": "Amazonas", "regiao": {"id": 1, "sigla": "N", "
 # MAGIC dentro do laço fica deslocado quatro espaços à direita.
 # MAGIC
 # MAGIC **Objetivo:** percorrer a lista de tabelas e imprimir, para cada uma, a frase
-# MAGIC `Lendo a tabela vendas do Supabase...`
+# MAGIC `Baixando vendas.parquet do data lake...`
 
 # COMMAND ----------
 
@@ -177,8 +177,8 @@ quantidades = [1, 3, 2, 5, 1]
 # MAGIC |---|---|
 # MAGIC | `requests` | Conversar com APIs pela internet |
 # MAGIC | `pandas` | Trabalhar com tabelas em memória (DataFrame) |
-# MAGIC | `sqlalchemy` | Conectar em bancos de dados como o Postgres |
 # MAGIC | `boto3` | Ler e gravar arquivos em storage compatível com S3 |
+# MAGIC | `io` | Tratar bytes da memória como se fossem arquivo |
 # MAGIC
 # MAGIC **Objetivo:** importar `requests` e `pandas` e imprimir a versão do pandas (`pd.__version__`).
 
@@ -252,98 +252,89 @@ URL_IBGE = "https://servicodados.ibge.gov.br/api/v1/localidades/estados"
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 9. boto3: lendo arquivos de um storage S3
+# MAGIC ## 9. boto3: lendo arquivos do data lake
 # MAGIC
-# MAGIC O **boto3** é a biblioteca da AWS para falar com o S3, o serviço de arquivos na nuvem. O Storage do
-# MAGIC **Supabase** também fala esse mesmo protocolo, então o mesmo código serve para os dois.
+# MAGIC O **boto3** é a biblioteca da AWS para falar com o **S3**, o serviço de arquivos na nuvem. O Storage do
+# MAGIC **Supabase** fala o mesmo protocolo, então o mesmo código serve para os dois: muda só o `endpoint_url`.
 # MAGIC
-# MAGIC ```python
-# MAGIC s3 = boto3.client(
-# MAGIC     "s3",
-# MAGIC     endpoint_url="https://<projeto>.storage.supabase.co/storage/v1/s3",
-# MAGIC     region_name="us-east-2",
-# MAGIC     aws_access_key_id=CHAVE,
-# MAGIC     aws_secret_access_key=SEGREDO,
-# MAGIC )
-# MAGIC ```
+# MAGIC | Termo | O que é |
+# MAGIC |---|---|
+# MAGIC | **Bucket** | A pasta raiz, o "balde" |
+# MAGIC | **Key** | O caminho do arquivo dentro do bucket, por exemplo `vendas.parquet` |
+# MAGIC | **Endpoint** | O endereço do serviço |
+# MAGIC | **Access key / secret** | Usuário e senha da máquina |
 # MAGIC
-# MAGIC **Objetivo:** completar o código abaixo para listar os arquivos do bucket e ler um Parquet direto da memória.
-# MAGIC Preencha as credenciais nos widgets do topo do notebook. Sem credenciais, a célula apenas avisa e segue.
+# MAGIC **Objetivo:** criar o cliente, listar os arquivos do bucket e imprimir o nome e o tamanho de cada um.
+# MAGIC
+# MAGIC > As chaves ficam no secret scope, nunca no notebook:
+# MAGIC > `databricks secrets put-secret imersao s3_key` e `... s3_secret`.
 
 # COMMAND ----------
 
 dbutils.widgets.text("s3_endpoint", "")
-dbutils.widgets.text("s3_bucket", "")
-dbutils.widgets.text("s3_key", "")
-dbutils.widgets.text("s3_secret", "")
+dbutils.widgets.text("s3_bucket", "ecommerce")
+dbutils.widgets.text("s3_region", "us-east-2")
 
 endpoint = dbutils.widgets.get("s3_endpoint")
 bucket = dbutils.widgets.get("s3_bucket")
 
 if not endpoint:
-    print("Sem credenciais: preencha os widgets para rodar esta célula.")
+    print("Sem endpoint: preencha o widget s3_endpoint para rodar esta célula.")
 else:
-    import io
     import boto3
-    import pandas as pd
 
     s3 = boto3.client(
         "s3",
         endpoint_url=endpoint,
-        region_name="us-east-2",
-        aws_access_key_id=dbutils.widgets.get("s3_key"),
-        aws_secret_access_key=dbutils.widgets.get("s3_secret"),
+        region_name=dbutils.widgets.get("s3_region"),
+        aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
+        aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
     )
 
     # escreva seu código aqui:
-    # 1. liste os arquivos do bucket com s3.list_objects_v2(Bucket=bucket)
-    # 2. baixe um arquivo com s3.get_object(Bucket=bucket, Key="vendas.parquet")
-    # 3. leia os bytes com pd.read_parquet(io.BytesIO(...)) e mostre df.head()
+    # 1. resposta = s3.list_objects_v2(Bucket=bucket)
+    # 2. percorra resposta["Contents"] e imprima objeto["Key"] e objeto["Size"]
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 10. SQLAlchemy: conectando no Postgres do Supabase
+# MAGIC ### Baixando um arquivo e virando DataFrame
 # MAGIC
-# MAGIC O **SQLAlchemy** cria a conexão (a *engine*) e o pandas usa essa conexão para executar SQL e devolver um
-# MAGIC DataFrame. É assim que os dados vão sair do Supabase hoje.
+# MAGIC O `get_object` devolve um dicionário; o conteúdo está em `Body`, e o `.read()` transforma em **bytes**.
+# MAGIC O pandas espera um arquivo, e o que temos são bytes na memória: o `io.BytesIO` finge ser um arquivo para
+# MAGIC o pandas conseguir ler.
 # MAGIC
-# MAGIC A URI do **Session pooler** tem este formato:
-# MAGIC
-# MAGIC ```
-# MAGIC postgresql+psycopg2://postgres.<ref>:<senha>@aws-0-<regiao>.pooler.supabase.com:5432/postgres?sslmode=require
-# MAGIC ```
-# MAGIC
-# MAGIC **Objetivo:** montar a engine com a URI guardada no segredo, rodar `SELECT 1` e ver o resultado.
-# MAGIC
-# MAGIC > Nunca escreva a senha dentro do notebook. Guarde no **secret scope**:
-# MAGIC > `databricks secrets put-secret imersao supabase_uri`
+# MAGIC **Objetivo:** baixar `vendas.parquet`, imprimir quantos bytes vieram e mostrar as primeiras linhas.
 
 # COMMAND ----------
 
-# MAGIC %pip install --quiet sqlalchemy psycopg2-binary
+# escreva seu código aqui
+
 
 # COMMAND ----------
 
-dbutils.widgets.text("supabase_uri", "")
+# MAGIC %md
+# MAGIC ## 10. Escrevendo bytes em arquivo
+# MAGIC
+# MAGIC No pipeline, o arquivo baixado é guardado **sem nenhuma alteração** em um volume do Databricks (a pasta
+# MAGIC *landing*). Gravar bytes é igual a gravar qualquer arquivo em Python:
+# MAGIC
+# MAGIC ```python
+# MAGIC with open(caminho, "wb") as arquivo:   # wb = write binary
+# MAGIC     arquivo.write(conteudo)
+# MAGIC ```
+# MAGIC
+# MAGIC **Objetivo:** escrever a função `guardar(conteudo, nome_arquivo)` que grava os bytes em
+# MAGIC `/Volumes/ecommerce/bronze/arquivos/landing/` e devolve o caminho. Depois, leia o arquivo de volta com
+# MAGIC `pd.read_parquet(caminho)` para conferir que ficou igual.
 
-uri = dbutils.widgets.get("supabase_uri")
-if not uri:
-    try:
-        uri = dbutils.secrets.get("imersao", "supabase_uri")
-    except Exception:
-        uri = ""
+# COMMAND ----------
 
-if not uri:
-    print("Sem URI: preencha o widget supabase_uri ou crie o segredo imersao/supabase_uri.")
-else:
-    from sqlalchemy import create_engine, text
-    import pandas as pd
+pasta_landing = "/Volumes/ecommerce/bronze/arquivos/landing"
+dbutils.fs.mkdirs(pasta_landing)
 
-    engine = create_engine(uri)
-    # escreva seu código aqui:
-    # 1. pd.read_sql("SELECT 1 AS teste", engine)
-    # 2. pd.read_sql("SELECT * FROM vendas LIMIT 5", engine)
+# escreva seu código aqui
+
 
 # COMMAND ----------
 
@@ -353,9 +344,9 @@ else:
 # MAGIC Se você resolveu os 10 exercícios, tem tudo o que precisa para a aula:
 # MAGIC
 # MAGIC - sabe guardar valores e percorrer listas;
-# MAGIC - entende a resposta de uma API;
-# MAGIC - sabe o que é uma engine de banco e por que a senha vai no segredo;
-# MAGIC - conhece as quatro bibliotecas que o pipeline usa.
+# MAGIC - entende a resposta de uma API e a de um storage S3;
+# MAGIC - sabe por que a credencial vai no segredo, e não no notebook;
+# MAGIC - conhece as bibliotecas que o pipeline usa.
 # MAGIC
 # MAGIC Confira as respostas no notebook **`00_esquenta_python_gabarito`** e siga para o
-# MAGIC **`01_ingestao_bronze`**, onde os dados do Supabase viram tabelas no Databricks.
+# MAGIC **`01_ingestao_bronze`**, onde os arquivos do data lake viram tabelas no Databricks.
