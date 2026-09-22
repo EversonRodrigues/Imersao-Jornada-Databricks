@@ -8,6 +8,9 @@ resources:
       schedule:
         quartz_cron_expression: "0 0 6 * * ?"
         timezone_id: America/Sao_Paulo
+        # A ingestão precisa das chaves do Supabase no secret scope (imersao/s3_key e s3_secret).
+        # Depois de criá-las, troque para UNPAUSED.
+        pause_status: PAUSED
 
       email_notifications:
         on_failure:
@@ -16,15 +19,12 @@ resources:
       parameters:
         - name: catalogo
           default: ${var.catalogo}
-        - name: origem
-          default: ${var.origem}
-        - name: url_base
-          default: ${var.url_base}
 
       tasks:
         - task_key: ingestao_bronze
           notebook_task:
-            notebook_path: ../aula-02-python-engenharia/01_ingestao_bronze.py
+            # o Job roda a versão completa; 01_ingestao_bronze.py é o notebook com lacunas da aula
+            notebook_path: ../aula-02-python-engenharia/01_ingestao_bronze_gabarito.py
 
         - task_key: silver
           depends_on:

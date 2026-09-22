@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Aula 2 · Parte 1: Data lake → Bronze
+# MAGIC # Aula 2 · Parte 1: Data lake → Bronze — gabarito
 # MAGIC ### "De onde vieram esses dados?"
 # MAGIC
 # MAGIC Na Aula 1 você arrastou 4 arquivos CSV para dentro do Databricks. Funciona uma vez. Mas numa empresa os
@@ -24,10 +24,8 @@
 # MAGIC | 4 | Gravamos a camada bronze, com metadados de ingestão |
 # MAGIC | 5 | Enriquecemos com a API do IBGE |
 # MAGIC
-# MAGIC **Como usar este notebook:** as configurações já vêm prontas; o que falta é o código de cada etapa.
-# MAGIC Cada célula diz o objetivo e dá a dica. Se travar, o `01_ingestao_bronze_gabarito` tem tudo escrito.
-# MAGIC
-# MAGIC > **Antes de começar:** faça o `00_esquenta_python` se você nunca programou em Python.
+# MAGIC > Este é o **gabarito**, com o pipeline inteiro escrito. O notebook `01_ingestao_bronze` tem as mesmas
+# MAGIC > células com lacunas, para você escrever. É ele que roda na aula ao vivo.
 
 # COMMAND ----------
 
@@ -64,13 +62,12 @@ TABELAS = ["vendas", "produtos", "clientes", "preco_competidores"]
 
 # COMMAND ----------
 
-# Objetivo: criar o catálogo e os schemas (bronze, silver e gold) e apagar as 4 tabelas bronze.
-# Dicas: spark.sql("...") roda SQL a partir do Python; use CREATE ... IF NOT EXISTS e
-#        DROP TABLE IF EXISTS {CATALOGO}.bronze.{tabela} dentro de um for sobre TABELAS.
-
 spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOGO}")
-# escreva seu código aqui
+for schema in ["bronze", "silver", "gold"]:
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOGO}.{schema}")
 
+for tabela in TABELAS:
+    spark.sql(f"DROP TABLE IF EXISTS {CATALOGO}.bronze.{tabela}")
 
 display(spark.sql(f"SHOW TABLES IN {CATALOGO}.bronze"))
 
@@ -105,14 +102,16 @@ display(spark.sql(f"SHOW TABLES IN {CATALOGO}.bronze"))
 
 # COMMAND ----------
 
-# Objetivo: criar o cliente S3.
-# Dica: boto3.client("s3", endpoint_url=..., region_name=..., aws_access_key_id=..., aws_secret_access_key=...)
-#       com as chaves vindas de dbutils.secrets.get("imersao", "s3_key") e ("imersao", "s3_secret").
-
 import boto3
 
-# escreva seu código aqui: s3 = boto3.client(...)
-
+s3 = boto3.client(
+    "s3",
+    endpoint_url=S3_ENDPOINT,
+    region_name=S3_REGION,
+    aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
+    aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
+)
+print(f"Cliente S3 criado em {S3_ENDPOINT}")
 
 # COMMAND ----------
 
@@ -127,12 +126,10 @@ import boto3
 
 # COMMAND ----------
 
-# Objetivo: listar os arquivos do bucket e imprimir o nome e o tamanho de cada um.
-# Dica: s3.list_objects_v2(Bucket=S3_BUCKET) devolve um dicionário; os arquivos estão em ["Contents"],
-#       e cada item tem "Key" e "Size".
+resposta = s3.list_objects_v2(Bucket=S3_BUCKET)
 
-# escreva seu código aqui
-
+for objeto in resposta.get("Contents", []):
+    print(f"{objeto['Key']:<30} {objeto['Size']:>10,} bytes")
 
 # COMMAND ----------
 
@@ -144,12 +141,8 @@ import boto3
 
 # COMMAND ----------
 
-# Objetivo: baixar o arquivo vendas.parquet e guardar os bytes em `conteudo`.
-# Dica: s3.get_object(Bucket=..., Key=...) devolve um dicionário; o conteúdo está em ["Body"], e o
-#       .read() transforma em bytes.
-
-# escreva seu código aqui
-
+objeto = s3.get_object(Bucket=S3_BUCKET, Key="vendas.parquet")
+conteudo = objeto["Body"].read()
 
 print(f"{len(conteudo):,} bytes baixados")
 
@@ -163,14 +156,10 @@ print(f"{len(conteudo):,} bytes baixados")
 
 # COMMAND ----------
 
-# Objetivo: transformar os bytes em DataFrame (`df_vendas`) e olhar as primeiras linhas.
-# Dica: pd.read_parquet(io.BytesIO(conteudo))
-
 import io
 import pandas as pd
 
-# escreva seu código aqui
-
+df_vendas = pd.read_parquet(io.BytesIO(conteudo))
 
 print(f"{len(df_vendas):,} linhas · colunas: {list(df_vendas.columns)}")
 display(df_vendas.head())
@@ -193,15 +182,16 @@ display(df_vendas.head())
 
 # COMMAND ----------
 
-# Objetivo: gravar ecommerce.bronze.vendas com as duas colunas de controle.
-# Dicas: spark.createDataFrame(df_vendas) converte de pandas para Spark;
-#        .withColumn("_ingerido_em", F.current_timestamp()) e .withColumn("_origem", F.lit(...));
-#        .write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(...)
-
 from pyspark.sql import functions as F
 
-# escreva seu código aqui
-
+(
+    spark.createDataFrame(df_vendas)
+    .withColumn("_ingerido_em", F.current_timestamp())
+    .withColumn("_origem", F.lit(f"s3://{S3_BUCKET}/vendas.parquet"))
+    .write.mode("overwrite")
+    .option("overwriteSchema", "true")
+    .saveAsTable(f"{CATALOGO}.bronze.vendas")
+)
 
 print(f"{CATALOGO}.bronze.vendas: {spark.table(f'{CATALOGO}.bronze.vendas').count():,} linhas")
 
@@ -215,11 +205,20 @@ print(f"{CATALOGO}.bronze.vendas: {spark.table(f'{CATALOGO}.bronze.vendas').coun
 
 # COMMAND ----------
 
-# Objetivo: repetir o mesmo caminho (baixar, ler e gravar) para cada tabela de TABELAS.
-
 for tabela in TABELAS:
-    # escreva seu código aqui
-    pass
+    objeto = s3.get_object(Bucket=S3_BUCKET, Key=f"{tabela}.parquet")
+    df = pd.read_parquet(io.BytesIO(objeto["Body"].read()))
+
+    (
+        spark.createDataFrame(df)
+        .withColumn("_ingerido_em", F.current_timestamp())
+        .withColumn("_origem", F.lit(f"s3://{S3_BUCKET}/{tabela}.parquet"))
+        .write.mode("overwrite")
+        .option("overwriteSchema", "true")
+        .saveAsTable(f"{CATALOGO}.bronze.{tabela}")
+    )
+
+    print(f"✅ {tabela:<20} {spark.table(f'{CATALOGO}.bronze.{tabela}').count():>6,} linhas")
 
 # COMMAND ----------
 
@@ -238,11 +237,9 @@ import requests
 
 URL_IBGE = "https://servicodados.ibge.gov.br/api/v1/localidades/estados"
 
-# Objetivo: chamar a API e guardar a resposta em `estados`.
-# Dicas: requests.get(URL_IBGE, timeout=60), raise_for_status() e .json()
-
-# escreva seu código aqui
-
+resposta = requests.get(URL_IBGE, timeout=60)
+resposta.raise_for_status()
+estados = resposta.json()
 
 print(f"{len(estados)} estados recebidos. Exemplo:")
 print(estados[0])
@@ -255,15 +252,20 @@ print(estados[0])
 
 # COMMAND ----------
 
-# Objetivo: achatar o JSON com pd.json_normalize e gravar ecommerce.bronze.estados_ibge,
-#           do mesmo jeito que você gravou as outras tabelas (a origem aqui é a URL da API).
-
 df_estados = pd.json_normalize(estados)
 df_estados.columns = [c.replace(".", "_") for c in df_estados.columns]
 print(list(df_estados.columns))
 
-# escreva seu código aqui
+(
+    spark.createDataFrame(df_estados)
+    .withColumn("_ingerido_em", F.current_timestamp())
+    .withColumn("_origem", F.lit(URL_IBGE))
+    .write.mode("overwrite")
+    .option("overwriteSchema", "true")
+    .saveAsTable(f"{CATALOGO}.bronze.estados_ibge")
+)
 
+print(f"{CATALOGO}.bronze.estados_ibge: {spark.table(f'{CATALOGO}.bronze.estados_ibge').count()} linhas")
 
 # COMMAND ----------
 
@@ -274,11 +276,12 @@ print(list(df_estados.columns))
 
 # COMMAND ----------
 
-# Objetivo: mostrar, para cada tabela, o nome, a contagem, a origem e a data de ingestão.
-# Dica: monte um SELECT ... UNION ALL ... com um for sobre TABELAS + ["estados_ibge"] e rode com spark.sql.
-
-# escreva seu código aqui
-
+conferencia = " UNION ALL ".join(
+    f"SELECT '{t}' AS tabela, COUNT(*) AS linhas, MAX(_origem) AS origem, MAX(_ingerido_em) AS ingerido_em "
+    f"FROM {CATALOGO}.bronze.{t}"
+    for t in TABELAS + ["estados_ibge"]
+)
+display(spark.sql(conferencia))
 
 # COMMAND ----------
 
@@ -290,7 +293,5 @@ print(list(df_estados.columns))
 # MAGIC - Uma ingestão que **não depende de ninguém arrastar arquivo**.
 # MAGIC - Metadados que respondem "de quando é esse dado, e de onde ele veio?".
 # MAGIC - Duas fontes diferentes (um data lake S3 e uma API) no mesmo formato de saída.
-# MAGIC
-# MAGIC Confira o seu código com o notebook **`01_ingestao_bronze_gabarito`**.
 # MAGIC
 # MAGIC **Amanhã:** a Aula 3 limpa e organiza esse dado nas camadas silver e gold, com a ajuda do Claude Code.

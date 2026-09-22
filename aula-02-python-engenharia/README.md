@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Esquenta** | [`00_esquenta_python.py`](./00_esquenta_python.py) (exercícios) e [`00_esquenta_python_gabarito.py`](./00_esquenta_python_gabarito.py) |
-| **Aula** | [`01_ingestao_bronze.py`](./01_ingestao_bronze.py) |
+| **Aula** | [`01_ingestao_bronze.py`](./01_ingestao_bronze.py) (com lacunas) e [`01_ingestao_bronze_gabarito.py`](./01_ingestao_bronze_gabarito.py) |
 | **Duração** | ~90 minutos |
 | **Pré-requisito** | Aula 1 feita e **conta verificada** para acesso à internet |
 
@@ -175,7 +175,7 @@ Se a silver falhar, a gold nem começa, e ninguém vê número errado. O Job rod
    databricks secrets put-secret imersao s3_secret
    ```
 
-> **Plano B:** se o storage não estiver pronto (ou cair no meio da aula), mude o widget `origem` para `arquivos`. O notebook passa a baixar os mesmos Parquet do repositório, e a aula continua sem interrupção.
+> **Plano B:** se o storage cair no meio da aula, os mesmos 4 arquivos Parquet estão na pasta [`dados/`](../dados/) do repositório e podem ser enviados direto ao volume pela interface. O gabarito mostra o caminho completo, então dá para seguir a explicação mesmo sem rodar.
 
 ### 1. Esquenta de Python (20 min)
 
@@ -183,7 +183,7 @@ Abra [`00_esquenta_python.py`](./00_esquenta_python.py) e resolva os 10 exercíc
 
 ### 2. Data lake → bronze
 
-Abra [`01_ingestao_bronze.py`](./01_ingestao_bronze.py), conecte em **Serverless** e rode célula por célula.
+Abra [`01_ingestao_bronze.py`](./01_ingestao_bronze.py), conecte em **Serverless** e siga célula por célula. Como no esquenta, as variáveis já vêm prontas e o que falta é o código de cada etapa: criar o cliente S3, listar o bucket, baixar, guardar no landing e gravar a bronze. O [gabarito](./01_ingestao_bronze_gabarito.py) tem tudo escrito, para conferir depois (é ele que o Job executa).
 
 O notebook começa **apagando** as tabelas que você subiu na mão na Aula 1. É proposital: no fim, elas voltam vindas do data lake, com a marca de quando e de onde chegaram.
 
@@ -200,8 +200,8 @@ No fim, a conferência deve mostrar:
 ### 3. Agende a ingestão
 
 1. **Jobs & Pipelines → Create → Job**, nome `Pipeline E-commerce`.
-2. Tarefa `ingestao_bronze`: notebook `01_ingestao_bronze`, compute **Serverless**.
-3. Em **Job parameters**: `catalogo` = `ecommerce` e `origem` = `supabase`.
+2. Tarefa `ingestao_bronze`: notebook `01_ingestao_bronze_gabarito`, compute **Serverless**.
+3. O notebook não usa parâmetros: o catálogo e o bucket estão nas constantes do topo.
 4. **Schedules & Triggers → Scheduled**: todo dia às 06:00, fuso `America/Sao_Paulo`.
 5. Em **Notifications**, coloque seu e-mail para falhas.
 6. **Run now** e veja a tarefa ficar verde.
@@ -219,8 +219,8 @@ Amanhã este Job ganha as tarefas de silver, gold e testes, e deixa de ser clica
 | `NoSuchBucket` | Nome do bucket errado | Confira a constante `S3_BUCKET` |
 | `KeyError: 'Contents'` | Bucket vazio | Faça o upload dos 4 Parquet |
 | `NoSuchKey` | Nome do arquivo diferente | Os arquivos precisam se chamar `vendas.parquet`, `produtos.parquet`… |
-| `EndpointConnectionError` logo na primeira célula | `S3_ENDPOINT` vazio ou com erro de digitação | Confira a constante no topo do notebook |
-| `ConnectionError` na API do IBGE | Conta não verificada | Verifique pelo LinkedIn; enquanto isso, use `origem = arquivos` |
+| `EndpointConnectionError` logo na primeira célula | `S3_ENDPOINT` com erro de digitação | Confira a constante no topo do notebook |
+| `ConnectionError` na API do IBGE | Conta não verificada | Verifique a conta pelo LinkedIn quando o Databricks pedir |
 | `ModuleNotFoundError: boto3` | Biblioteca ausente | Rode `%pip install boto3` na primeira célula |
 | Contagem diferente da esperada | Arquivo do bucket desatualizado | Refaça o upload dos Parquet e rode de novo |
 

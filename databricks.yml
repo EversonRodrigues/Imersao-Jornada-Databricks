@@ -23,16 +23,6 @@ variables:
   catalogo:
     description: Catálogo do Unity Catalog com os schemas bronze, silver e gold.
     default: ecommerce
-  origem:
-    description: >-
-      De onde o pipeline lê os dados: "supabase" (data lake no Storage do Supabase, o normal na
-      aula) ou "arquivos" (plano B, lê os Parquet do GitHub). Troque para "supabase" depois de
-      guardar as chaves: databricks secrets put-secret imersao s3_key (e s3_secret). O endpoint, o
-      bucket e a região ficam nas constantes do notebook 01_ingestao_bronze.
-    default: arquivos
-  url_base:
-    description: Endereço dos arquivos Parquet usados quando origem = "arquivos".
-    default: https://raw.githubusercontent.com/lvgalvao/Imersao-Jornada-Databricks/main/dados
   warehouse_id:
     description: SQL warehouse usado pelos dashboards e pelo Genie.
     lookup:

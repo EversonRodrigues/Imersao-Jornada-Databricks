@@ -28,7 +28,7 @@ E-commerce brasileiro com vendas em dois canais (site e loja física). Três dir
 
 ## 4. Camadas
 
-### Bronze (`aula-02-python-engenharia/01_ingestao_bronze.py`, Python) — Aula 2
+### Bronze (`aula-02-python-engenharia/01_ingestao_bronze_gabarito.py`, Python) — Aula 2
 - Baixa cada Parquet do bucket S3 com `boto3` e copia para `landing/` sem alteração. Credenciais no secret scope `imersao` (`s3_key` e `s3_secret`); o widget `origem = arquivos` é o plano B, que lê os mesmos Parquet do GitHub.
 - Grava uma tabela Delta por fonte, **sobrescrevendo**, com as colunas extras `_ingerido_em` (timestamp da carga) e `_arquivo_origem` (caminho do arquivo).
 - Cria catálogo, schemas e volume se não existirem (**idempotente**).

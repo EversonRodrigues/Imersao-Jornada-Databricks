@@ -142,7 +142,7 @@ Os arquivos estão em [`dados/`](./dados/), em CSV (Aula 1) e Parquet (Aula 2).
 │   └── dashboard/                     ← dashboard pronto para importar
 ├── aula-02-python-engenharia/
 │   ├── 00_esquenta_python.py          ← exercícios de Python (e o gabarito)
-│   └── 01_ingestao_bronze.py          ← data lake + API → bronze
+│   └── 01_ingestao_bronze.py          ← data lake + API → bronze (e o gabarito)
 ├── aula-03-claude-code/
 │   ├── 01_silver.py                   ← limpeza e enriquecimento
 │   ├── 02_gold.sql                    ← tabelas de negócio
