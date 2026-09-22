@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Aula 3 · Testes de qualidade de dados
+# MAGIC # Aula 3 · Parte 3: Testes de qualidade de dados
 # MAGIC
 # MAGIC Um pipeline profissional não termina quando a tabela é criada. Termina quando alguém **prova** que ela está certa.
 # MAGIC

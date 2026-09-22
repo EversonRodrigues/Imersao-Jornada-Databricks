@@ -9,8 +9,8 @@ Imersão Jornada de Dados: e-commerce brasileiro no Databricks Free Edition, em 
 ## Estrutura
 
 - `aula-01-sql-dashboard/`: notebooks da Aula 1 (os CSVs sobem pela interface direto em `ecommerce.bronze.*`) e dashboard sobre a bronze. A partir da Aula 2, o Job sobrescreve essas tabelas bronze, agora com metadados de ingestão.
-- `aula-02-python-engenharia/`: esquenta de Python (exercícios e gabarito) e o pipeline `01_ingestao_bronze.py` (Storage do Supabase via boto3, protocolo S3) → `02_silver.py` → `03_gold.sql`.
-- `aula-03-claude-code/`: PRD, testes de qualidade (`testes/04_testes_qualidade.py`) e dashboard sobre `gold`.
+- `aula-02-python-engenharia/`: esquenta de Python (exercícios e gabarito) e a ingestão `01_ingestao_bronze.py` (Storage do Supabase via boto3, protocolo S3). A Aula 2 termina na bronze.
+- `aula-03-claude-code/`: transformação `01_silver.py` e `02_gold.sql`, PRD, testes de qualidade (`testes/03_testes_qualidade.py`) e dashboard sobre `gold`.
 - `aula-04-genie/`: comentários das tabelas gold e o Genie space (`genie/diretoria_ecommerce.geniespace.json`).
 - `resources/`: Job, dashboards e Genie em YAML. Caminhos relativos começam com `../`.
 - `dados/`: CSV e Parquet de origem.
@@ -33,9 +33,9 @@ databricks experimental aitools tools query -p <perfil> -- "SELECT ..."
 - Nomes de tabelas e colunas em português, `snake_case`, sem acento.
 - Notebooks no formato *source*: primeira linha `# Databricks notebook source` (Python) ou `-- Databricks notebook source` (SQL); células separadas por `COMMAND ----------`; texto em células `MAGIC %md`, em português e explicando o porquê.
 - Python lê o catálogo do widget `catalogo`; notebooks SQL usam `USE CATALOG IDENTIFIER(:catalogo)` depois de criar o widget numa célula `%python`.
-- Silver em PySpark, gold em SQL (ver justificativa no README da Aula 2).
+- Silver em PySpark, gold em SQL (ver justificativa no README da Aula 3).
 - Gold é recriada com `CREATE OR REPLACE`, o que apaga comentários. Por isso o Job reaplica os comentários na última tarefa: coluna nova na gold exige comentário novo em `aula-04-genie/01_preparar_dados_para_ia.sql`.
-- Toda tabela gold nova precisa de teste em `testes/04_testes_qualidade.py`.
+- Toda tabela gold nova precisa de teste em `testes/03_testes_qualidade.py`.
 - Na Free Edition, `CREATE CATALOG` funciona por SQL, mas não pela API REST (falta storage root). Não troque o SQL por chamada de API.
 
 ## Números de referência (para validar mudanças)

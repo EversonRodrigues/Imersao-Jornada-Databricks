@@ -266,33 +266,31 @@ URL_IBGE = "https://servicodados.ibge.gov.br/api/v1/localidades/estados"
 # MAGIC
 # MAGIC **Objetivo:** criar o cliente, listar os arquivos do bucket e imprimir o nome e o tamanho de cada um.
 # MAGIC
-# MAGIC > As chaves ficam no secret scope, nunca no notebook:
+# MAGIC > Só o endpoint, o bucket e a região ficam no notebook. As chaves vão para o secret scope:
 # MAGIC > `databricks secrets put-secret imersao s3_key` e `... s3_secret`.
 
 # COMMAND ----------
 
-dbutils.widgets.text("s3_endpoint", "")
-dbutils.widgets.text("s3_bucket", "ecommerce")
-dbutils.widgets.text("s3_region", "us-east-2")
+# copie do Supabase: Project Settings → Storage → S3 access keys
+S3_ENDPOINT = "https://pnkfrnjvvywiufphcqgw.storage.supabase.co/storage/v1/s3"
+S3_BUCKET = "ecommerce"
+S3_REGION = "us-east-2"
 
-endpoint = dbutils.widgets.get("s3_endpoint")
-bucket = dbutils.widgets.get("s3_bucket")
-
-if not endpoint:
-    print("Sem endpoint: preencha o widget s3_endpoint para rodar esta célula.")
+if not S3_ENDPOINT:
+    print("Preencha S3_ENDPOINT para rodar esta célula.")
 else:
     import boto3
 
     s3 = boto3.client(
         "s3",
-        endpoint_url=endpoint,
-        region_name=dbutils.widgets.get("s3_region"),
+        endpoint_url=S3_ENDPOINT,
+        region_name=S3_REGION,
         aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
         aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
     )
 
     # escreva seu código aqui:
-    # 1. resposta = s3.list_objects_v2(Bucket=bucket)
+    # 1. resposta = s3.list_objects_v2(Bucket=S3_BUCKET)
     # 2. percorra resposta["Contents"] e imprima objeto["Key"] e objeto["Size"]
 
 # COMMAND ----------

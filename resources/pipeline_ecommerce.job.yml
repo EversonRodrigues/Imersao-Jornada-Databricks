@@ -1,5 +1,5 @@
-# Pipeline diário: fontes externas → bronze → silver → gold → testes → documentação para o Genie.
-# Na Aula 2 este Job é criado à mão pela interface; na Aula 3 ele vira código aqui.
+# Pipeline diário: data lake → bronze (Aula 2) → silver → gold → testes (Aula 3) → documentação (Aula 4).
+# Na Aula 2 o Job é criado à mão pela interface, só com a ingestão; na Aula 3 ele vira código aqui, completo.
 resources:
   jobs:
     pipeline_ecommerce:
@@ -18,12 +18,6 @@ resources:
           default: ${var.catalogo}
         - name: origem
           default: ${var.origem}
-        - name: s3_endpoint
-          default: ${var.s3_endpoint}
-        - name: s3_bucket
-          default: ${var.s3_bucket}
-        - name: s3_region
-          default: ${var.s3_region}
         - name: url_base
           default: ${var.url_base}
 
@@ -36,19 +30,19 @@ resources:
           depends_on:
             - task_key: ingestao_bronze
           notebook_task:
-            notebook_path: ../aula-02-python-engenharia/02_silver.py
+            notebook_path: ../aula-03-claude-code/01_silver.py
 
         - task_key: gold
           depends_on:
             - task_key: silver
           notebook_task:
-            notebook_path: ../aula-02-python-engenharia/03_gold.sql
+            notebook_path: ../aula-03-claude-code/02_gold.sql
 
         - task_key: testes_qualidade
           depends_on:
             - task_key: gold
           notebook_task:
-            notebook_path: ../aula-03-claude-code/testes/04_testes_qualidade.py
+            notebook_path: ../aula-03-claude-code/testes/03_testes_qualidade.py
 
         - task_key: documentar_para_genie
           depends_on:

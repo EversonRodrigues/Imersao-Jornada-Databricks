@@ -1,6 +1,6 @@
 -- Databricks notebook source
 -- MAGIC %md
--- MAGIC # Aula 2 · Parte 3: Silver → Gold
+-- MAGIC # Aula 3 · Parte 2: Silver → Gold
 -- MAGIC
 -- MAGIC A gold é o dado **pronto para o negócio**: cada tabela responde as perguntas de uma diretoria, sem que ninguém precise lembrar de `JOIN`, de receita ou de produto não cadastrado.
 -- MAGIC

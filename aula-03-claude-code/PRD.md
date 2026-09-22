@@ -23,17 +23,17 @@ E-commerce brasileiro com vendas em dois canais (site e loja física). Três dir
 
 | Fonte | Formato | Endereço | Conteúdo |
 |---|---|---|---|
-| Data lake (Storage do Supabase, protocolo S3) | Parquet | bucket `${s3_bucket}`, arquivos `{tabela}.parquet` | `vendas`, `produtos`, `clientes`, `preco_competidores` |
+| Data lake (Storage do Supabase, protocolo S3) | Parquet | bucket e endpoint nas constantes do notebook de ingestão; arquivos `{tabela}.parquet` | `vendas`, `produtos`, `clientes`, `preco_competidores` |
 | API do IBGE | JSON | `https://servicodados.ibge.gov.br/api/v1/localidades/estados` | 27 UFs com nome e região |
 
 ## 4. Camadas
 
-### Bronze (`01_ingestao_bronze.py`, Python)
+### Bronze (`aula-02-python-engenharia/01_ingestao_bronze.py`, Python) — Aula 2
 - Baixa cada Parquet do bucket S3 com `boto3` e copia para `landing/` sem alteração. Credenciais no secret scope `imersao` (`s3_key` e `s3_secret`); o widget `origem = arquivos` é o plano B, que lê os mesmos Parquet do GitHub.
 - Grava uma tabela Delta por fonte, **sobrescrevendo**, com as colunas extras `_ingerido_em` (timestamp da carga) e `_arquivo_origem` (caminho do arquivo).
 - Cria catálogo, schemas e volume se não existirem (**idempotente**).
 
-### Silver (`02_silver.py`, PySpark)
+### Silver (`aula-03-claude-code/01_silver.py`, PySpark) — Aula 3
 
 | Tabela | Chave | Regras |
 |---|---|---|
@@ -42,7 +42,7 @@ E-commerce brasileiro com vendas em dois canais (site e loja física). Três dir
 | `silver.preco_competidores` | `id_produto` + `nome_concorrente` | Remove duplicatas; preço em `DECIMAL(10,2)`; `data_coleta` em `timestamp` |
 | `silver.vendas` | `id_venda` | Remove duplicatas; `receita = quantidade × preco_unitario`; `data`, `hora`, `dia_semana` (português) e `dia_semana_num` (1 = domingo); `produto_cadastrado` = false quando o produto não existe no catálogo. **Nenhuma venda é descartada.** |
 
-### Gold (`03_gold.sql`, SQL)
+### Gold (`aula-03-claude-code/02_gold.sql`, SQL) — Aula 3
 
 | Tabela | Grão | Colunas principais |
 |---|---|---|
@@ -56,7 +56,7 @@ E-commerce brasileiro com vendas em dois canais (site e loja física). Três dir
 - Classificação de preço: MAIS_CARO_QUE_TODOS, MAIS_BARATO_QUE_TODOS, ACIMA_DA_MEDIA, ABAIXO_DA_MEDIA ou NA_MEDIA.
 - `diferenca_pct_vs_media` em pontos percentuais (10 = 10% mais caro).
 
-## 5. Qualidade de dados (`testes/04_testes_qualidade.py`)
+## 5. Qualidade de dados (`aula-03-claude-code/testes/03_testes_qualidade.py`)
 
 O Job **falha** se qualquer teste encontrar problema:
 

@@ -1,17 +1,19 @@
 # Aula 3: Claude Code & Engenharia de Dados
 
-> **Objetivo do dia:** transformar o pipeline que você montou à mão em um **projeto profissional**: código no Git, especificação escrita, testes de qualidade que param o Job quando o dado está errado e deploy do projeto inteiro com um comando. Tudo com a IA como par de programação.
+> **Objetivo do dia:** transformar o dado cru da bronze em tabelas em que o negócio confia (**silver** e **gold**) e fazer isso como profissional: código no Git, especificação escrita, testes que param o Job quando o dado está errado e deploy com um comando. Tudo com a IA como par de programação.
 
 | | |
 |---|---|
-| **Material** | [`PRD.md`](./PRD.md), [`CLAUDE.md`](../CLAUDE.md), [`testes/04_testes_qualidade.py`](./testes/04_testes_qualidade.py), [`databricks.yml`](../databricks.yml) e [`resources/`](../resources/) |
-| **Duração** | ~100 minutos |
+| **Notebooks** | [`01_silver.py`](./01_silver.py), [`02_gold.sql`](./02_gold.sql) e [`testes/03_testes_qualidade.py`](./testes/03_testes_qualidade.py) |
+| **Apoio** | [`PRD.md`](./PRD.md), [`CLAUDE.md`](../CLAUDE.md), [`databricks.yml`](../databricks.yml) e [`resources/`](../resources/) |
+| **Duração** | ~120 minutos |
 | **Pré-requisito** | Aula 2 feita; computador com terminal; conta no GitHub |
 
 ### Aula 2 × Aula 3: qual a diferença?
 
 | | Aula 2 | Aula 3 |
 |---|---|---|
+| O que entrega | A ingestão: o dado chega sozinho na bronze | A transformação: silver, gold e a garantia de que estão certas |
 | Ideia | **Eu construo e entendo** | **Eu profissionalizo com IA** |
 | Onde o código mora | Notebooks no workspace | Repositório Git |
 | Como o Job existe | Clicado na interface | Arquivo YAML versionado |
@@ -23,11 +25,12 @@
 
 | Bloco | Tempo | O que acontece |
 |---|---|---|
-| Teoria | 20 min | Engenharia de software em dados, IA como par de programação |
+| Teoria | 15 min | Engenharia de software em dados, IA como par de programação |
 | Setup | 15 min | Git, Databricks CLI, autenticação e Claude Code |
-| Conhecendo o projeto | 10 min | O Claude Code lê o repositório e explica a arquitetura |
+| Silver | 20 min | Limpar, tipar, enriquecer e marcar problemas (`01_silver.py`) |
+| Gold | 20 min | As tabelas de cada diretoria (`02_gold.sql`), com `CASE WHEN` e window functions |
 | Testes de qualidade | 15 min | O que testar e por que o Job deve falhar |
-| Nova feature com PRD | 25 min | `gold.vendas_por_regiao`, do PRD ao Job verde |
+| Nova feature com PRD | 20 min | `gold.vendas_por_regiao`, do PRD ao Job verde |
 | Deploy | 15 min | `dev` → `prod`, dashboard sobre a gold |
 
 ---
@@ -43,7 +46,7 @@ Um pipeline de dados é código, e código em produção precisa das mesmas prá
 | **Versionamento** | Todo notebook, SQL e configuração no Git, com histórico de quem mudou o quê | Repositório no GitHub |
 | **Infraestrutura como código** | Job, dashboard e permissões descritos em arquivo, e não em cliques | `databricks.yml` + `resources/*.yml` |
 | **Ambientes separados** | Testar sem estragar o que os diretores estão vendo | Targets `dev` e `prod` |
-| **Testes** | Provar que o dado está certo antes de alguém usar | `04_testes_qualidade.py` |
+| **Testes** | Provar que o dado está certo antes de alguém usar | `testes/03_testes_qualidade.py` |
 | **Especificação** | Escrever o que o sistema deve fazer antes de fazer | `PRD.md` |
 
 ### Declarative Automation Bundles (antigos Databricks Asset Bundles)
@@ -189,7 +192,21 @@ databricks bundle run pipeline_ecommerce -t dev -p imersao \
 
 Resultado esperado: as 5 tarefas verdes (`ingestao_bronze`, `silver`, `gold`, `testes_qualidade` e `documentar_para_genie`).
 
-### 2. Conhecendo o projeto com o Claude Code
+### 2. Construindo a silver e a gold
+
+Rode [`01_silver.py`](./01_silver.py) e [`02_gold.sql`](./02_gold.sql), nessa ordem, e confira:
+
+| O que conferir | Esperado |
+|---|---|
+| `silver.vendas` com produto não cadastrado | 20 linhas |
+| Clientes por região | Norte 17, Nordeste 12, Centro-Oeste 9, Sudeste 8 e Sul 4 |
+| Reconciliação da receita | R$ 974.077,28 na silver e em todas as golds |
+| `gold.clientes_segmentacao` | 10 VIP, 25 TOP_TIER e 15 REGULAR |
+| `gold.precos_competitividade` | 35 produtos mais caros que todos os concorrentes |
+
+> **Por que PySpark na silver e SQL na gold?** Limpeza é uma sequência de passos pequenos, e cada passo vira uma linha de Python fácil de testar. Já as regras de negócio da gold são escritas em SQL, a língua que o analista e o diretor leram na Aula 1.
+
+### 3. Conhecendo o projeto com o Claude Code
 
 Abra o `claude` na pasta e experimente:
 
@@ -202,18 +219,18 @@ Rode os testes de qualidade contra o workspace (perfil imersao) e me diga se alg
 foge dos valores de referência do CLAUDE.md.
 ```
 
-### 3. Veja um teste falhar (de propósito)
+### 4. Veja um teste falhar (de propósito)
 
 Peça ao Claude Code:
 
 ```
-Mude o limite de produtos não cadastrados em testes/04_testes_qualidade.py de 1% para 0,5%,
+Mude o limite de produtos não cadastrados em testes/03_testes_qualidade.py de 1% para 0,5%,
 faça o deploy em dev e rode o Job. Me explique o que aconteceu.
 ```
 
 O teste falha (são 0,66% de vendas sem cadastro), o Job fica vermelho e a tarefa `documentar_para_genie` não roda. É isso que você quer em produção: **parar antes de mostrar número errado**. Depois, peça para voltar o limite.
 
-### 4. Nova feature a partir do PRD
+### 5. Nova feature a partir do PRD
 
 A seção 9 do [`PRD.md`](./PRD.md) descreve `gold.vendas_por_regiao`. Peça:
 
@@ -229,7 +246,7 @@ Revise o que ele propõe, aprove, e acompanhe:
 3. os comentários para o Genie;
 4. `bundle validate`, `deploy` e `run` até ficar verde.
 
-### 5. Commit e produção
+### 6. Commit e produção
 
 ```bash
 git add -A && git commit -m "Adiciona gold.vendas_por_regiao"

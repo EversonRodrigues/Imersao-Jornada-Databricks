@@ -1,6 +1,6 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Aula 2 · Parte 2: Bronze → Silver
+# MAGIC # Aula 3 · Parte 1: Bronze → Silver
 # MAGIC
 # MAGIC A bronze é fiel à origem, com todos os defeitos. A **silver** é o dado em que dá para confiar:
 # MAGIC
@@ -13,6 +13,8 @@
 # MAGIC | Cliente só tem a UF | Enriquece com nome do estado e região (API do IBGE) |
 # MAGIC
 # MAGIC **Por que PySpark aqui?** Limpeza é uma sequência de passos pequenos (converter, calcular, juntar, marcar). Em Python cada passo vira uma linha que dá para testar separado e reaproveitar em funções. As regras de negócio da gold ficam em SQL, que é a língua que o negócio já leu na Aula 1.
+# MAGIC
+# MAGIC > Na Aula 3 este notebook é o ponto de partida do trabalho com o Claude Code: você descreve a regra no PRD e revisa o que a IA escreve.
 
 # COMMAND ----------
 

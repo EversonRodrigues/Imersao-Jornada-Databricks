@@ -37,20 +37,24 @@
 # MAGIC |---|---|
 # MAGIC | `catalogo` | Catálogo do Unity Catalog (padrão `ecommerce`) |
 # MAGIC | `origem` | `supabase` (o normal) ou `arquivos` (plano B, lê os Parquet do GitHub) |
-# MAGIC | `s3_endpoint` | `https://<ref>.storage.supabase.co/storage/v1/s3` |
-# MAGIC | `s3_bucket` | Nome do bucket, por exemplo `ecommerce` |
-# MAGIC | `s3_region` | Região do projeto, por exemplo `us-east-2` |
 # MAGIC | `url_base` | Endereço dos Parquet usados pelo plano B |
 # MAGIC
-# MAGIC As **chaves de acesso** não são widget: ficam no secret scope (veja a seção 2).
+# MAGIC Os dados do seu bucket ficam nas **constantes** da célula seguinte: copie do Supabase e cole ali. As
+# MAGIC **chaves de acesso** não entram no notebook: ficam no secret scope (veja a seção 2).
 
 # COMMAND ----------
 
+# ---------------------------------------------------------------------------
+# Copie estes três valores do Supabase:
+#   Project Settings → Storage → S3 access keys (endpoint e região)
+#   Storage → o nome do bucket que você criou
+# ---------------------------------------------------------------------------
+S3_ENDPOINT = "https://pnkfrnjvvywiufphcqgw.storage.supabase.co/storage/v1/s3"
+S3_BUCKET = "ecommerce"
+S3_REGION = "us-east-2"
+
 dbutils.widgets.text("catalogo", "ecommerce")
 dbutils.widgets.dropdown("origem", "supabase", ["supabase", "arquivos"])
-dbutils.widgets.text("s3_endpoint", "")
-dbutils.widgets.text("s3_bucket", "ecommerce")
-dbutils.widgets.text("s3_region", "us-east-2")
 dbutils.widgets.text(
     "url_base",
     "https://raw.githubusercontent.com/lvgalvao/Imersao-Jornada-Databricks/main/dados",
@@ -65,6 +69,7 @@ TABELAS = ["vendas", "produtos", "clientes", "preco_competidores"]
 
 print(f"Catálogo: {catalogo}")
 print(f"Origem:   {origem}")
+print(f"Bucket:   {S3_BUCKET} ({S3_REGION})")
 print(f"Landing:  {pasta_landing}")
 
 # COMMAND ----------
@@ -128,21 +133,14 @@ import boto3
 
 s3 = None
 if origem == "supabase":
-    endpoint = dbutils.widgets.get("s3_endpoint")
-    if not endpoint:
-        raise ValueError(
-            "Preencha o widget s3_endpoint (https://<ref>.storage.supabase.co/storage/v1/s3) "
-            "ou mude o widget origem para 'arquivos'."
-        )
-
     s3 = boto3.client(
         "s3",
-        endpoint_url=endpoint,
-        region_name=dbutils.widgets.get("s3_region"),
+        endpoint_url=S3_ENDPOINT,
+        region_name=S3_REGION,
         aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
         aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
     )
-    print("Cliente S3 criado.")
+    print(f"Cliente S3 criado em {S3_ENDPOINT}")
 
 # COMMAND ----------
 
@@ -157,10 +155,8 @@ if origem == "supabase":
 
 # COMMAND ----------
 
-bucket = dbutils.widgets.get("s3_bucket")
-
 if s3 is not None:
-    resposta = s3.list_objects_v2(Bucket=bucket)
+    resposta = s3.list_objects_v2(Bucket=S3_BUCKET)
 
     for objeto in resposta.get("Contents", []):
         print(f"{objeto['Key']:<30} {objeto['Size']:>10,} bytes")
@@ -180,7 +176,7 @@ if s3 is not None:
 
 def baixar_do_s3(nome_arquivo: str) -> bytes:
     """Baixa um arquivo do bucket e devolve os bytes."""
-    objeto = s3.get_object(Bucket=bucket, Key=nome_arquivo)
+    objeto = s3.get_object(Bucket=S3_BUCKET, Key=nome_arquivo)
     return objeto["Body"].read()
 
 

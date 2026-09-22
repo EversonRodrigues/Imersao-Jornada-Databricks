@@ -5,8 +5,8 @@
 | | |
 |---|---|
 | **Esquenta** | [`00_esquenta_python.py`](./00_esquenta_python.py) (exercícios) e [`00_esquenta_python_gabarito.py`](./00_esquenta_python_gabarito.py) |
-| **Aula** | [`01_ingestao_bronze.py`](./01_ingestao_bronze.py) → [`02_silver.py`](./02_silver.py) → [`03_gold.sql`](./03_gold.sql) |
-| **Duração** | ~110 minutos |
+| **Aula** | [`01_ingestao_bronze.py`](./01_ingestao_bronze.py) |
+| **Duração** | ~90 minutos |
 | **Pré-requisito** | Aula 1 feita e **conta verificada** para acesso à internet |
 
 ## Roteiro
@@ -14,11 +14,12 @@
 | Bloco | Tempo | O que acontece |
 |---|---|---|
 | Esquenta de Python | 20 min | Variáveis, listas, dicionários, `for`, funções, `requests` e `boto3` |
-| Teoria | 15 min | Data lake, protocolo S3, ETL, arquitetura medalhão |
-| Data lake → bronze | 25 min | Apagar o trabalho manual da Aula 1 e trazer os arquivos do storage |
-| Silver | 20 min | Limpar, tipar, enriquecer e marcar problemas |
-| Gold | 15 min | As visões de negócio, com `CASE WHEN` e window functions |
-| Job | 10 min | Agendar o pipeline para rodar sozinho |
+| Teoria | 15 min | Data lake, protocolo S3, camada bronze, ETL |
+| Data lake → bronze | 30 min | Apagar o trabalho manual da Aula 1 e trazer os arquivos do storage |
+| API do IBGE | 10 min | Uma segunda fonte, em JSON |
+| Job de ingestão | 10 min | Agendar a chegada do dado para todo dia às 6h |
+
+> **A aula termina na bronze.** Limpar, padronizar e criar as tabelas de negócio (silver e gold) é o trabalho da [Aula 3](../aula-03-claude-code/), feito com a ajuda do Claude Code.
 
 ---
 
@@ -107,11 +108,13 @@ Em um lakehouse o padrão é **ELT**: primeiro guardamos o dado bruto (é barato
                                problemas marcados
 ```
 
-| Camada | Pergunta que ela responde | Neste projeto |
+| Camada | Pergunta que ela responde | Quando |
 |---|---|---|
-| **Bronze** | "O que exatamente chegou, e quando?" | `bronze.vendas`, `bronze.estados_ibge`… com `_ingerido_em` e `_origem` |
-| **Silver** | "Posso confiar neste dado?" | Preço em `DECIMAL`, datas convertidas, receita calculada, região do cliente, flag de produto não cadastrado |
-| **Gold** | "Qual a resposta para o diretor?" | `vendas_temporais`, `vendas_produtos`, `clientes_segmentacao`, `precos_competitividade` |
+| **Bronze** | "O que exatamente chegou, e quando?" | **Hoje.** `bronze.vendas`, `bronze.estados_ibge`… com `_ingerido_em` e `_origem` |
+| **Silver** | "Posso confiar neste dado?" | Aula 3 |
+| **Gold** | "Qual a resposta para o diretor?" | Aula 3 |
+
+Hoje a regra é simples: **a bronze não limpa nada**. Ela guarda o dado como chegou, com a marca de quando chegou. Qualquer correção feita aqui apagaria a evidência do que a origem mandou.
 
 **Por que não fazer tudo de uma vez?** Porque, quando algo der errado (e vai dar), você sabe em qual camada procurar e reprocessa a partir da bronze, sem precisar baixar tudo da origem de novo.
 
@@ -164,7 +167,7 @@ Se a silver falhar, a gold nem começa, e ninguém vê número errado. O Job rod
 1. **Storage → New bucket**, nome `ecommerce`.
 2. Faça upload dos 4 arquivos `.parquet`.
 3. **Project Settings → Storage → S3 access keys → New access key**. Guarde as duas partes.
-4. Anote o endpoint, que aparece na mesma tela: `https://<ref>.storage.supabase.co/storage/v1/s3`.
+4. Anote o endpoint, que aparece na mesma tela: `https://<ref>.storage.supabase.co/storage/v1/s3`. Ele, o nome do bucket e a região vão nas constantes do topo do notebook (`S3_ENDPOINT`, `S3_BUCKET` e `S3_REGION`).
 5. Guarde as chaves no Databricks:
    ```bash
    databricks secrets create-scope imersao
@@ -194,38 +197,16 @@ No fim, a conferência deve mostrar:
 | `bronze.preco_competidores` | 728 |
 | `bronze.estados_ibge` | 27 |
 
-### 3. Silver
-
-Rode [`02_silver.py`](./02_silver.py). Confira:
-
-- `silver.vendas` com **20** linhas `produto_cadastrado = false`;
-- clientes por região: Norte 17, Nordeste 12, Centro-Oeste 9, Sudeste 8 e Sul 4;
-- `data_coleta` agora é `timestamp` e todos os preços são `decimal(10,2)`.
-
-### 4. Gold
-
-Rode [`03_gold.sql`](./03_gold.sql). A última célula faz a **reconciliação**: a receita precisa ser **R$ 974.077,28** em todas as visões.
-
-| Tabela | Resultado esperado |
-|---|---|
-| `gold.clientes_segmentacao` | 10 VIP, 25 TOP_TIER e 15 REGULAR |
-| `gold.precos_competitividade` | 215 produtos: 35 mais caros que todos, 92 acima da média, 6 na média, 76 abaixo da média e 6 mais baratos que todos |
-| `gold.vendas_produtos` | Top 1: Fone de Ouvido Esportivo, R$ 116.462,65 |
-
-> **Por que 22 mil e 17 mil na segmentação?** O projeto antigo usava R$ 10 mil e R$ 5 mil. Com esses limites, 49 dos 50 clientes eram VIP, e um segmento que tem todo mundo não ajuda ninguém. Os novos limites vieram da distribuição real: cerca de 20% dos clientes são VIP. Regra de negócio se valida com o dado.
-
-### 5. Agende o Job
+### 3. Agende a ingestão
 
 1. **Jobs & Pipelines → Create → Job**, nome `Pipeline E-commerce`.
 2. Tarefa `ingestao_bronze`: notebook `01_ingestao_bronze`, compute **Serverless**.
-3. **+ Add task** `silver` (notebook `02_silver`), dependendo de `ingestao_bronze`.
-4. **+ Add task** `gold` (notebook `03_gold`), dependendo de `silver`.
-5. Em **Job parameters**: `catalogo` = `ecommerce`, `origem` = `supabase`, `s3_endpoint`, `s3_bucket` e `s3_region`.
-6. **Schedules & Triggers → Scheduled**: todo dia às 06:00, fuso `America/Sao_Paulo`.
-7. Em **Notifications**, coloque seu e-mail para falhas.
-8. **Run now** e acompanhe o grafo ficar verde.
+3. Em **Job parameters**: `catalogo` = `ecommerce` e `origem` = `supabase`.
+4. **Schedules & Triggers → Scheduled**: todo dia às 06:00, fuso `America/Sao_Paulo`.
+5. Em **Notifications**, coloque seu e-mail para falhas.
+6. **Run now** e veja a tarefa ficar verde.
 
-> Na Aula 3 este mesmo Job deixa de ser clicado na interface e vira um arquivo versionado no Git: [`resources/pipeline_ecommerce.job.yml`](../resources/pipeline_ecommerce.job.yml).
+Amanhã este Job ganha as tarefas de silver, gold e testes, e deixa de ser clicado na interface: vira um arquivo versionado no Git.
 
 ---
 
@@ -235,13 +216,13 @@ Rode [`03_gold.sql`](./03_gold.sql). A última célula faz a **reconciliação**
 |---|---|---|
 | `EndpointConnectionError` | Endpoint errado ou sem internet | Confira o endereço do Storage e a verificação da conta |
 | `InvalidAccessKeyId` / `SignatureDoesNotMatch` | Chave ou segredo errados | Recrie a chave no Supabase e atualize o secret scope |
-| `NoSuchBucket` | Nome do bucket errado | Confira o widget `s3_bucket` |
+| `NoSuchBucket` | Nome do bucket errado | Confira a constante `S3_BUCKET` |
 | `KeyError: 'Contents'` | Bucket vazio | Faça o upload dos 4 Parquet |
 | `NoSuchKey` | Nome do arquivo diferente | Os arquivos precisam se chamar `vendas.parquet`, `produtos.parquet`… |
-| `ValueError: Preencha o widget s3_endpoint` | Widget vazio | Preencha o endpoint ou use `origem = arquivos` |
+| `EndpointConnectionError` logo na primeira célula | `S3_ENDPOINT` vazio ou com erro de digitação | Confira a constante no topo do notebook |
 | `ConnectionError` na API do IBGE | Conta não verificada | Verifique pelo LinkedIn; enquanto isso, use `origem = arquivos` |
-| `TABLE_OR_VIEW_NOT_FOUND: silver.vendas` | Rodou a gold antes da silver | Rode os notebooks na ordem |
-| Receita da gold diferente da silver | Algum `JOIN` perdeu ou duplicou vendas | Compare com as consultas originais |
+| `ModuleNotFoundError: boto3` | Biblioteca ausente | Rode `%pip install boto3` na primeira célula |
+| Contagem diferente da esperada | Arquivo do bucket desatualizado | Refaça o upload dos Parquet e rode de novo |
 
 ---
 
@@ -254,4 +235,6 @@ Rode [`03_gold.sql`](./03_gold.sql). A última célula faz a **reconciliação**
 
 ## Amanhã
 
-O pipeline funciona, mas mora em cliques na interface, sem teste e sem versionamento. Se alguém apagar o Job, ele some. Na [Aula 3](../aula-03-claude-code/) você **profissionaliza** o projeto com Git, testes e deploy, usando IA como par de programação.
+O dado chega sozinho, mas chega **cru**: preço como número quebrado, data como texto, venda de produto que não existe no catálogo. Ninguém entrega isso para um diretor.
+
+Na [Aula 3](../aula-03-claude-code/) você constrói as camadas **silver** e **gold** com a ajuda do Claude Code, escreve testes que param o Job quando o dado está errado e faz o deploy do projeto inteiro com um comando.

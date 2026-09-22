@@ -27,8 +27,8 @@ Em 4 aulas você vai responder essas perguntas, automatizar a chegada dos dados,
 | Dia | Tema | O que você entrega no fim | Material |
 |---|---|---|---|
 | **1** | SQL & Dashboard | As 3 diretorias respondidas e um dashboard publicado | [aula-01-sql-dashboard](./aula-01-sql-dashboard/) |
-| **2** | Python & Engenharia de Dados | Pipeline bronze → silver → gold rodando todo dia às 6h | [aula-02-python-engenharia](./aula-02-python-engenharia/) |
-| **3** | Claude Code & Engenharia de Dados | Projeto no Git, testes de qualidade e deploy com um comando | [aula-03-claude-code](./aula-03-claude-code/) |
+| **2** | Python & Engenharia de Dados | Ingestão automática do data lake para a camada bronze | [aula-02-python-engenharia](./aula-02-python-engenharia/) |
+| **3** | Claude Code & Engenharia de Dados | Silver e gold construídas com IA, testes de qualidade e deploy | [aula-03-claude-code](./aula-03-claude-code/) |
 | **4** | Genie | Os diretores perguntando em português e recebendo a resposta certa | [aula-04-genie](./aula-04-genie/) |
 
 A frase que resume a imersão: **no dia 1 você respondeu o diretor; no dia 4 ele não precisa mais de você para perguntar.**
@@ -73,8 +73,8 @@ flowchart LR
 |---|---|---|
 | `ecommerce.bronze` | O dado como chegou da origem | Aula 1: você, pelo upload dos CSVs. A partir da Aula 2: o Job, com metadados de ingestão |
 | `ecommerce.bronze.arquivos` | Volume com os arquivos originais baixados pelo pipeline | Job (Python), a partir da Aula 2 |
-| `ecommerce.silver` | Dados limpos, tipados e enriquecidos | Job (PySpark) |
-| `ecommerce.gold` | Tabelas prontas para cada diretoria | Job (SQL) |
+| `ecommerce.silver` | Dados limpos, tipados e enriquecidos | Aula 3: Job (PySpark) |
+| `ecommerce.gold` | Tabelas prontas para cada diretoria | Aula 3: Job (SQL) |
 
 ---
 
@@ -141,12 +141,13 @@ Os arquivos estão em [`dados/`](./dados/), em CSV (Aula 1) e Parquet (Aula 2).
 │   ├── 01_sql_e_dashboard.sql         ← a resolução, passo a passo
 │   └── dashboard/                     ← dashboard pronto para importar
 ├── aula-02-python-engenharia/
-│   ├── 01_ingestao_bronze.py          ← fontes externas → bronze
-│   ├── 02_silver.py                   ← limpeza e enriquecimento
-│   └── 03_gold.sql                    ← tabelas de negócio
+│   ├── 00_esquenta_python.py          ← exercícios de Python (e o gabarito)
+│   └── 01_ingestao_bronze.py          ← data lake + API → bronze
 ├── aula-03-claude-code/
+│   ├── 01_silver.py                   ← limpeza e enriquecimento
+│   ├── 02_gold.sql                    ← tabelas de negócio
 │   ├── PRD.md                         ← especificação do pipeline para a IA
-│   ├── testes/04_testes_qualidade.py  ← testes que param o Job se o dado estiver errado
+│   ├── testes/03_testes_qualidade.py  ← testes que param o Job se o dado estiver errado
 │   └── dashboard/                     ← dashboard lendo da gold
 └── aula-04-genie/
     ├── 01_preparar_dados_para_ia.sql  ← comentários que ensinam o Genie

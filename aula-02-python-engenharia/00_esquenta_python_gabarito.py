@@ -202,28 +202,26 @@ display(df_estados[df_estados["regiao"] == "Norte"])
 
 # COMMAND ----------
 
-dbutils.widgets.text("s3_endpoint", "")
-dbutils.widgets.text("s3_bucket", "ecommerce")
-dbutils.widgets.text("s3_region", "us-east-2")
+# copie do Supabase: Project Settings → Storage → S3 access keys
+S3_ENDPOINT = "https://pnkfrnjvvywiufphcqgw.storage.supabase.co/storage/v1/s3"
+S3_BUCKET = "ecommerce"
+S3_REGION = "us-east-2"
 
-endpoint = dbutils.widgets.get("s3_endpoint")
-bucket = dbutils.widgets.get("s3_bucket")
-
-if not endpoint:
-    print("Sem endpoint: preencha o widget s3_endpoint para rodar esta célula.")
+if not S3_ENDPOINT:
+    print("Preencha S3_ENDPOINT para rodar esta célula.")
 else:
     import boto3
 
     s3 = boto3.client(
         "s3",
-        endpoint_url=endpoint,                                   # https://<ref>.storage.supabase.co/storage/v1/s3
-        region_name=dbutils.widgets.get("s3_region"),
+        endpoint_url=S3_ENDPOINT,                                   # https://<ref>.storage.supabase.co/storage/v1/s3
+        region_name=S3_REGION,
         aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
         aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
     )
 
     # a resposta é um dicionário; os arquivos ficam na chave "Contents"
-    resposta = s3.list_objects_v2(Bucket=bucket)
+    resposta = s3.list_objects_v2(Bucket=S3_BUCKET)
 
     for objeto in resposta.get("Contents", []):
         print(f"{objeto['Key']:<30} {objeto['Size']:>10,} bytes")
@@ -242,10 +240,10 @@ else:
 
 # COMMAND ----------
 
-if endpoint:
+if S3_ENDPOINT:
     import io
 
-    objeto = s3.get_object(Bucket=bucket, Key="vendas.parquet")
+    objeto = s3.get_object(Bucket=S3_BUCKET, Key="vendas.parquet")
     conteudo = objeto["Body"].read()
     print(f"{len(conteudo):,} bytes baixados")
 
@@ -278,7 +276,7 @@ def guardar(conteudo: bytes, nome_arquivo: str) -> str:
     return destino
 
 
-if endpoint:
+if S3_ENDPOINT:
     caminho = guardar(conteudo, "vendas.parquet")
     print("gravado em:", caminho)
 
