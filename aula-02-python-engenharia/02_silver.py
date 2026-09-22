@@ -27,7 +27,7 @@ DINHEIRO = "decimal(10,2)"
 
 def bronze(tabela: str) -> DataFrame:
     """Lê uma tabela bronze sem as colunas de controle da ingestão."""
-    return spark.table(f"{catalogo}.bronze.{tabela}").drop("_ingerido_em", "_arquivo_origem")
+    return spark.table(f"{catalogo}.bronze.{tabela}").drop("_ingerido_em", "_origem")
 
 
 def gravar_silver(df: DataFrame, tabela: str) -> None:
