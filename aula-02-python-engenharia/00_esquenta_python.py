@@ -264,45 +264,33 @@ URL_IBGE = "https://servicodados.ibge.gov.br/api/v1/localidades/estados"
 # MAGIC | **Endpoint** | O endereço do serviço |
 # MAGIC | **Access key / secret** | Usuário e senha da máquina |
 # MAGIC
-# MAGIC **Objetivo:** criar o cliente, listar os arquivos do bucket e imprimir o nome e o tamanho de cada um.
-# MAGIC
-# MAGIC > Só o endpoint, o bucket e a região ficam no notebook. As chaves vão para o secret scope:
-# MAGIC > `databricks secrets put-secret imersao s3_key` e `... s3_secret`.
+# MAGIC > Na aula a chave fica no notebook, para ser simples de ver. Em produção ela sai daqui e vai para o
+# MAGIC > secret scope do Databricks, o que entra na Aula 3.
 
 # COMMAND ----------
 
+# Objetivo: criar o cliente S3 e listar os buckets, para conferir que a conexão funciona.
+# Dica: s3.list_buckets() devolve um dicionário; os buckets estão em ["Buckets"], cada um com "Name".
+
+import boto3
+
 # copie do Supabase: Project Settings → Storage → S3 access keys
 S3_ENDPOINT = "https://pnkfrnjvvywiufphcqgw.storage.supabase.co/storage/v1/s3"
-S3_BUCKET = "ecommerce"
 S3_REGION = "us-east-2"
+S3_BUCKET = "ecommerce"
 
-if not S3_ENDPOINT:
-    print("Preencha S3_ENDPOINT para rodar esta célula.")
-else:
-    import boto3
+ACCESS_KEY = "XXXX"
+SECRET_KEY = "XXXX"
 
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=S3_ENDPOINT,
-        region_name=S3_REGION,
-        aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
-        aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
-    )
+# escreva seu código aqui: s3 = boto3.client(...) e depois liste os buckets
 
-    # escreva seu código aqui:
-    # 1. resposta = s3.list_objects_v2(Bucket=S3_BUCKET)
-    # 2. percorra resposta["Contents"] e imprima objeto["Key"] e objeto["Size"]
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Baixando um arquivo e virando DataFrame
+# MAGIC **Objetivo:** listar os arquivos do bucket `ecommerce`, imprimindo o nome e o tamanho de cada um.
 # MAGIC
-# MAGIC O `get_object` devolve um dicionário; o conteúdo está em `Body`, e o `.read()` transforma em **bytes**.
-# MAGIC O pandas espera um arquivo, e o que temos são bytes na memória: o `io.BytesIO` finge ser um arquivo para
-# MAGIC o pandas conseguir ler.
-# MAGIC
-# MAGIC **Objetivo:** baixar `vendas.parquet`, imprimir quantos bytes vieram e mostrar as primeiras linhas.
+# MAGIC Dica: `s3.list_objects_v2(Bucket=S3_BUCKET)["Contents"]`, onde cada item tem `"Key"` e `"Size"`.
 
 # COMMAND ----------
 
@@ -312,24 +300,17 @@ else:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 10. Escrevendo bytes em arquivo
+# MAGIC ## 10. De bytes para tabela
 # MAGIC
-# MAGIC No pipeline, o arquivo baixado é guardado **sem nenhuma alteração** em um volume do Databricks (a pasta
-# MAGIC *landing*). Gravar bytes é igual a gravar qualquer arquivo em Python:
+# MAGIC O `get_object` devolve um dicionário; o conteúdo está em `Body`, e o `.read()` transforma em **bytes**.
+# MAGIC O pandas espera um arquivo, e o que temos são bytes na memória: o `io.BytesIO` finge ser um arquivo.
 # MAGIC
-# MAGIC ```python
-# MAGIC with open(caminho, "wb") as arquivo:   # wb = write binary
-# MAGIC     arquivo.write(conteudo)
-# MAGIC ```
-# MAGIC
-# MAGIC **Objetivo:** escrever a função `guardar(conteudo, nome_arquivo)` que grava os bytes em
-# MAGIC `/Volumes/ecommerce/bronze/arquivos/landing/` e devolve o caminho. Depois, leia o arquivo de volta com
-# MAGIC `pd.read_parquet(caminho)` para conferir que ficou igual.
+# MAGIC **Objetivo:** baixar `vendas.parquet`, imprimir quantos bytes vieram, transformar em DataFrame e mostrar
+# MAGIC as primeiras linhas.
 
 # COMMAND ----------
 
-pasta_landing = "/Volumes/ecommerce/bronze/arquivos/landing"
-dbutils.fs.mkdirs(pasta_landing)
+import io
 
 # escreva seu código aqui
 
@@ -343,8 +324,7 @@ dbutils.fs.mkdirs(pasta_landing)
 # MAGIC
 # MAGIC - sabe guardar valores e percorrer listas;
 # MAGIC - entende a resposta de uma API e a de um storage S3;
-# MAGIC - sabe por que a credencial vai no segredo, e não no notebook;
+# MAGIC - sabe transformar bytes em tabela com o pandas;
 # MAGIC - conhece as bibliotecas que o pipeline usa.
 # MAGIC
-# MAGIC Confira as respostas no notebook **`00_esquenta_python_gabarito`** e siga para o
-# MAGIC **`01_ingestao_bronze`**, onde os arquivos do data lake viram tabelas no Databricks.
+# MAGIC Siga para o **`01_ingestao_bronze`**, onde os arquivos do data lake viram tabelas no Databricks.

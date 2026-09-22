@@ -1,14 +1,14 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Aula 2 · Parte 1: Data lake → Bronze — gabarito
+# MAGIC # Aula 2 · Data lake → Bronze — gabarito
 # MAGIC ### "De onde vieram esses dados?"
 # MAGIC
 # MAGIC Na Aula 1 você arrastou 4 arquivos CSV para dentro do Databricks. Funciona uma vez. Mas numa empresa os
 # MAGIC arquivos não ficam no seu computador: eles ficam em um **storage na nuvem**, e chegam lá todo dia,
 # MAGIC exportados pelos sistemas.
 # MAGIC
-# MAGIC O nosso data lake é o **Storage do Supabase**, que fala o mesmo protocolo do **Amazon S3**. Ou seja: o
-# MAGIC código que você escreve hoje funciona igual na AWS, e é isso que as empresas usam.
+# MAGIC O nosso data lake é o **Storage do Supabase**, que fala o mesmo protocolo do **Amazon S3**. O código que
+# MAGIC você escreve hoje funciona igual na AWS.
 # MAGIC
 # MAGIC ```
 # MAGIC  Storage do Supabase (S3)  ─┐
@@ -16,119 +16,65 @@
 # MAGIC  API do IBGE (JSON)        ─┘     (Delta + metadados de ingestão)
 # MAGIC ```
 # MAGIC
-# MAGIC | Etapa | O que acontece |
-# MAGIC |---|---|
-# MAGIC | 1 | Apagamos as tabelas que você subiu na mão na Aula 1 |
-# MAGIC | 2 | Conectamos no storage com `boto3`, a biblioteca de S3 |
-# MAGIC | 3 | Listamos e baixamos os Parquet |
-# MAGIC | 4 | Gravamos a camada bronze, com metadados de ingestão |
-# MAGIC | 5 | Enriquecemos com a API do IBGE |
-# MAGIC
-# MAGIC > Este é o **gabarito**, com o pipeline inteiro escrito. O notebook `01_ingestao_bronze` tem as mesmas
-# MAGIC > células com lacunas, para você escrever. É ele que roda na aula ao vivo.
+# MAGIC > Este é o **gabarito**, com tudo escrito. O notebook `01_ingestao_bronze` tem as mesmas células com
+# MAGIC > lacunas, para você preencher na aula.
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Configuração
+# MAGIC ## 1. Conectando no storage
 # MAGIC
-# MAGIC Três valores do seu bucket, o catálogo e a lista de tabelas. As **chaves de acesso** não entram aqui:
-# MAGIC ficam no secret scope (veja a seção 2).
-
-# COMMAND ----------
-
-# ---------------------------------------------------------------------------
-# Copie estes valores do Supabase:
-#   Project Settings → Storage → S3 access keys (endpoint e região)
-#   Storage → o nome do bucket que você criou
-# ---------------------------------------------------------------------------
-S3_ENDPOINT = "https://pnkfrnjvvywiufphcqgw.storage.supabase.co/storage/v1/s3"
-S3_BUCKET = "ecommerce"
-S3_REGION = "us-east-2"
-
-CATALOGO = "ecommerce"
-TABELAS = ["vendas", "produtos", "clientes", "preco_competidores"]
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## 1. Apagando o trabalho manual da Aula 1
-# MAGIC
-# MAGIC Vamos jogar fora as tabelas que você subiu na mão. Pode apagar sem medo: no fim deste notebook elas
-# MAGIC voltam, agora vindas do data lake e prontas para se atualizar sozinhas todo dia.
-# MAGIC
-# MAGIC **Essa é a diferença entre um analista e um engenheiro de dados:** o analista carrega o arquivo; o
-# MAGIC engenheiro constrói o caminho por onde o arquivo passa sozinho.
-
-# COMMAND ----------
-
-spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOGO}")
-for schema in ["bronze", "silver", "gold"]:
-    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOGO}.{schema}")
-
-for tabela in TABELAS:
-    spark.sql(f"DROP TABLE IF EXISTS {CATALOGO}.bronze.{tabela}")
-
-display(spark.sql(f"SHOW TABLES IN {CATALOGO}.bronze"))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## 2. Conectando no data lake com boto3
-# MAGIC
-# MAGIC **S3** (*Simple Storage Service*) é o serviço de arquivos da AWS, e virou o padrão do mercado: quase todo
-# MAGIC storage na nuvem hoje aceita o mesmo protocolo. O Storage do Supabase é um deles.
-# MAGIC
-# MAGIC | Termo | O que é | Aqui |
-# MAGIC |---|---|---|
-# MAGIC | **Bucket** | A "pasta raiz", o balde | `ecommerce` |
-# MAGIC | **Key** | O caminho do arquivo dentro do bucket | `vendas.parquet` |
-# MAGIC | **Endpoint** | O endereço do serviço | `https://<ref>.storage.supabase.co/storage/v1/s3` |
-# MAGIC | **Access key / secret** | Usuário e senha da máquina | Criados em *Project Settings → Storage → S3 access keys* |
-# MAGIC
-# MAGIC A biblioteca **`boto3`** é a da AWS. Mudando o `endpoint_url`, ela fala com qualquer storage compatível.
-# MAGIC
-# MAGIC > **Nunca cole chave de acesso no notebook.** Notebook vai para o Git, e credencial em repositório é
-# MAGIC > incidente de segurança. Guarde no **secret scope** do Databricks, pela CLI:
-# MAGIC >
-# MAGIC > ```bash
-# MAGIC > databricks secrets create-scope imersao
-# MAGIC > databricks secrets put-secret imersao s3_key
-# MAGIC > databricks secrets put-secret imersao s3_secret
-# MAGIC > ```
-# MAGIC >
-# MAGIC > O `dbutils.secrets.get` lê o valor, e o Databricks troca o segredo por `[REDACTED]` em qualquer saída
-# MAGIC > impressa.
+# MAGIC Quatro valores, copiados do Supabase em **Project Settings → Storage → S3 access keys**:
 
 # COMMAND ----------
 
 import boto3
 
+S3_ENDPOINT = "https://pnkfrnjvvywiufphcqgw.storage.supabase.co/storage/v1/s3"
+S3_REGION = "us-east-2"
+
+ACCESS_KEY = "XXXX"
+SECRET_KEY = "XXXX"
+
 s3 = boto3.client(
     "s3",
     endpoint_url=S3_ENDPOINT,
     region_name=S3_REGION,
-    aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
-    aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
+    aws_access_key_id=ACCESS_KEY,
+    aws_secret_access_key=SECRET_KEY,
 )
-print(f"Cliente S3 criado em {S3_ENDPOINT}")
+
+# Listar buckets
+response = s3.list_buckets()
+
+for bucket in response["Buckets"]:
+    print(bucket["Name"])
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### O que existe no bucket?
+# MAGIC Se os buckets apareceram, a conexão está certa e qualquer erro daqui para frente é do seu código.
 # MAGIC
-# MAGIC Todo pipeline que fala com um sistema externo deveria começar com um teste barato. Se a listagem
-# MAGIC responde, a conexão e as credenciais estão certas, e qualquer erro daqui para frente é do seu código.
+# MAGIC | Termo | O que é |
+# MAGIC |---|---|
+# MAGIC | **Bucket** | A "pasta raiz", o balde |
+# MAGIC | **Key** | O caminho do arquivo dentro do bucket, por exemplo `vendas.parquet` |
+# MAGIC | **Endpoint** | O endereço do serviço |
+# MAGIC | **Access key / secret** | Usuário e senha da máquina |
 # MAGIC
-# MAGIC A resposta do `list_objects_v2` é um dicionário. Os arquivos ficam na chave `Contents`, que é uma lista
-# MAGIC de dicionários, um por arquivo, com `Key` (o nome) e `Size` (o tamanho em bytes).
+# MAGIC > Na aula, a chave fica no notebook para ser simples de ver. **Em produção, ela nunca fica**: vai para o
+# MAGIC > secret scope (`dbutils.secrets.get("imersao", "s3_key")`), porque notebook vai para o Git. Isso entra
+# MAGIC > na Aula 3.
+# MAGIC
+# MAGIC ## 2. O que tem dentro do bucket
 
 # COMMAND ----------
 
-resposta = s3.list_objects_v2(Bucket=S3_BUCKET)
+BUCKET = "ecommerce"
 
-for objeto in resposta.get("Contents", []):
+response = s3.list_objects_v2(Bucket=BUCKET)
+
+for objeto in response["Contents"]:
     print(f"{objeto['Key']:<30} {objeto['Size']:>10,} bytes")
 
 # COMMAND ----------
@@ -136,12 +82,11 @@ for objeto in resposta.get("Contents", []):
 # MAGIC %md
 # MAGIC ## 3. Baixando um arquivo
 # MAGIC
-# MAGIC Começamos com **um** arquivo, para entender cada passo. O `get_object` devolve outro dicionário; o
-# MAGIC conteúdo do arquivo está em `Body`, e o `.read()` transforma em **bytes**.
+# MAGIC O `get_object` devolve um dicionário; o conteúdo está em `Body`, e o `.read()` transforma em **bytes**.
 
 # COMMAND ----------
 
-objeto = s3.get_object(Bucket=S3_BUCKET, Key="vendas.parquet")
+objeto = s3.get_object(Bucket=BUCKET, Key="vendas.parquet")
 conteudo = objeto["Body"].read()
 
 print(f"{len(conteudo):,} bytes baixados")
@@ -167,15 +112,35 @@ display(df_vendas.head())
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## 4. Bronze: gravando a tabela Delta
+# MAGIC ## 4. Gravando na bronze
 # MAGIC
+# MAGIC Antes, a estrutura. Aproveitamos para **apagar as tabelas que você subiu na mão na Aula 1**: elas voltam
+# MAGIC agora vindas do data lake.
+
+# COMMAND ----------
+
+CATALOGO = "ecommerce"
+TABELAS = ["vendas", "produtos", "clientes", "preco_competidores"]
+
+spark.sql(f"CREATE CATALOG IF NOT EXISTS {CATALOGO}")
+for schema in ["bronze", "silver", "gold"]:
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {CATALOGO}.{schema}")
+
+for tabela in TABELAS:
+    spark.sql(f"DROP TABLE IF EXISTS {CATALOGO}.bronze.{tabela}")
+
+display(spark.sql(f"SHOW TABLES IN {CATALOGO}.bronze"))
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC A bronze guarda o dado **como chegou**, mais duas colunas de controle que o arquivo original não tem:
 # MAGIC
 # MAGIC - `_ingerido_em`: quando o dado entrou;
 # MAGIC - `_origem`: de onde ele veio.
 # MAGIC
 # MAGIC Com essas duas colunas você responde, daqui a três meses, a pergunta que todo mundo faz: *"esse número
-# MAGIC está velho?"*. Nada é limpo aqui: limpeza é trabalho da silver.
+# MAGIC está velho?"*. Nada é limpo aqui: limpeza é trabalho da silver, amanhã.
 # MAGIC
 # MAGIC O `spark.createDataFrame` converte o DataFrame do pandas em DataFrame do Spark, que é o que sabe gravar
 # MAGIC em tabela Delta.
@@ -187,32 +152,32 @@ from pyspark.sql import functions as F
 (
     spark.createDataFrame(df_vendas)
     .withColumn("_ingerido_em", F.current_timestamp())
-    .withColumn("_origem", F.lit(f"s3://{S3_BUCKET}/vendas.parquet"))
+    .withColumn("_origem", F.lit(f"s3://{BUCKET}/vendas.parquet"))
     .write.mode("overwrite")
     .option("overwriteSchema", "true")
     .saveAsTable(f"{CATALOGO}.bronze.vendas")
 )
 
-print(f"{CATALOGO}.bronze.vendas: {spark.table(f'{CATALOGO}.bronze.vendas').count():,} linhas")
+display(spark.table(f"{CATALOGO}.bronze.vendas").limit(5))
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## 5. Repetindo para as 4 tabelas
 # MAGIC
-# MAGIC E se fossem 4, 10 ou 100 arquivos? Copiar o bloco acima 100 vezes é pedir para errar. O `for` que você
-# MAGIC treinou no esquenta repete o mesmo caminho para cada tabela.
+# MAGIC E se fossem 4, 10 ou 100 arquivos? Copiar o bloco acima 100 vezes é pedir para errar. O `for` repete o
+# MAGIC mesmo caminho para cada tabela.
 
 # COMMAND ----------
 
 for tabela in TABELAS:
-    objeto = s3.get_object(Bucket=S3_BUCKET, Key=f"{tabela}.parquet")
+    objeto = s3.get_object(Bucket=BUCKET, Key=f"{tabela}.parquet")
     df = pd.read_parquet(io.BytesIO(objeto["Body"].read()))
 
     (
         spark.createDataFrame(df)
         .withColumn("_ingerido_em", F.current_timestamp())
-        .withColumn("_origem", F.lit(f"s3://{S3_BUCKET}/{tabela}.parquet"))
+        .withColumn("_origem", F.lit(f"s3://{BUCKET}/{tabela}.parquet"))
         .write.mode("overwrite")
         .option("overwriteSchema", "true")
         .saveAsTable(f"{CATALOGO}.bronze.{tabela}")
@@ -228,8 +193,7 @@ for tabela in TABELAS:
 # MAGIC A Diretora de Customer Success pediu a visão **por região**, mas o cadastro de clientes só tem a UF.
 # MAGIC Nenhum arquivo interno resolve isso: o dado está fora da empresa.
 # MAGIC
-# MAGIC A API pública do IBGE devolve os 27 estados com a sua região, em JSON. Repare que o padrão é o mesmo do
-# MAGIC S3: buscar na origem e gravar na bronze.
+# MAGIC Repare que o padrão é o mesmo do S3: buscar na origem, olhar o que veio e gravar na bronze.
 
 # COMMAND ----------
 
@@ -237,9 +201,8 @@ import requests
 
 URL_IBGE = "https://servicodados.ibge.gov.br/api/v1/localidades/estados"
 
-resposta = requests.get(URL_IBGE, timeout=60)
-resposta.raise_for_status()
-estados = resposta.json()
+response = requests.get(URL_IBGE, timeout=60)
+estados = response.json()
 
 print(f"{len(estados)} estados recebidos. Exemplo:")
 print(estados[0])
@@ -247,14 +210,13 @@ print(estados[0])
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC O JSON tem um dicionário dentro do outro (`regiao`). Achatamos com `pd.json_normalize`, que transforma
-# MAGIC `regiao.nome` em uma coluna. Quem trata isso de vez é a silver.
+# MAGIC O JSON tem um dicionário dentro do outro (`regiao`). O `pd.json_normalize` achata isso e transforma
+# MAGIC `regiao.nome` em uma coluna.
 
 # COMMAND ----------
 
 df_estados = pd.json_normalize(estados)
-df_estados.columns = [c.replace(".", "_") for c in df_estados.columns]
-print(list(df_estados.columns))
+df_estados.columns = [coluna.replace(".", "_") for coluna in df_estados.columns]
 
 (
     spark.createDataFrame(df_estados)
@@ -265,14 +227,12 @@ print(list(df_estados.columns))
     .saveAsTable(f"{CATALOGO}.bronze.estados_ibge")
 )
 
-print(f"{CATALOGO}.bronze.estados_ibge: {spark.table(f'{CATALOGO}.bronze.estados_ibge').count()} linhas")
+display(spark.table(f"{CATALOGO}.bronze.estados_ibge").limit(5))
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## 7. Conferência
-# MAGIC
-# MAGIC As tabelas que você apagou no começo voltaram, agora com a marca de quando e de onde vieram.
 
 # COMMAND ----------
 
@@ -294,4 +254,5 @@ display(spark.sql(conferencia))
 # MAGIC - Metadados que respondem "de quando é esse dado, e de onde ele veio?".
 # MAGIC - Duas fontes diferentes (um data lake S3 e uma API) no mesmo formato de saída.
 # MAGIC
-# MAGIC **Amanhã:** a Aula 3 limpa e organiza esse dado nas camadas silver e gold, com a ajuda do Claude Code.
+# MAGIC **Amanhã:** a Aula 3 limpa e organiza esse dado nas camadas silver e gold, com a ajuda do Claude Code, e
+# MAGIC tira a chave de dentro do notebook.

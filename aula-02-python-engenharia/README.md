@@ -65,29 +65,36 @@ import boto3
 
 s3 = boto3.client(
     "s3",
-    endpoint_url="https://<ref>.storage.supabase.co/storage/v1/s3",
-    region_name="us-east-2",
-    aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
-    aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
+    endpoint_url=S3_ENDPOINT,
+    region_name=S3_REGION,
+    aws_access_key_id=ACCESS_KEY,
+    aws_secret_access_key=SECRET_KEY,
 )
 
-s3.list_objects_v2(Bucket="ecommerce")            # o que existe no bucket
-s3.get_object(Bucket="ecommerce", Key="vendas.parquet")   # baixar um arquivo
+s3.list_buckets()                                          # conferir a conexão
+s3.list_objects_v2(Bucket="ecommerce")                     # o que existe no bucket
+s3.get_object(Bucket="ecommerce", Key="vendas.parquet")    # baixar um arquivo
 ```
 
 O `boto3` é da AWS, mas o `endpoint_url` faz ele falar com qualquer storage compatível. O código que você escreve hoje funciona igual na Amazon.
 
-### Credencial não vai no notebook
+### A credencial na aula e na vida real
 
-Notebook vai para o Git, e credencial em repositório é incidente de segurança. Guarde no **secret scope** do Databricks:
+Na aula, a chave fica visível no notebook: são quatro linhas, e é o que deixa a explicação simples.
+
+```python
+ACCESS_KEY = "XXXX"
+SECRET_KEY = "XXXX"
+```
+
+Em um projeto de verdade isso não acontece, porque notebook vai para o Git e credencial em repositório é incidente de segurança. O lugar certo é o **secret scope** do Databricks:
 
 ```bash
 databricks secrets create-scope imersao
 databricks secrets put-secret imersao s3_key
-databricks secrets put-secret imersao s3_secret
 ```
 
-No notebook, `dbutils.secrets.get("imersao", "s3_key")` lê o valor, e o Databricks troca o segredo por `[REDACTED]` em qualquer saída impressa.
+Aí o notebook lê com `dbutils.secrets.get("imersao", "s3_key")`, e o Databricks troca o valor por `[REDACTED]` em qualquer saída impressa. Essa troca é um dos assuntos da Aula 3.
 
 ### ETL e ELT
 
@@ -167,13 +174,8 @@ Se a silver falhar, a gold nem começa, e ninguém vê número errado. O Job rod
 1. **Storage → New bucket**, nome `ecommerce`.
 2. Faça upload dos 4 arquivos `.parquet`.
 3. **Project Settings → Storage → S3 access keys → New access key**. Guarde as duas partes.
-4. Anote o endpoint, que aparece na mesma tela: `https://<ref>.storage.supabase.co/storage/v1/s3`. Ele, o nome do bucket e a região vão nas constantes do topo do notebook (`S3_ENDPOINT`, `S3_BUCKET` e `S3_REGION`).
-5. Guarde as chaves no Databricks:
-   ```bash
-   databricks secrets create-scope imersao
-   databricks secrets put-secret imersao s3_key
-   databricks secrets put-secret imersao s3_secret
-   ```
+4. Anote o endpoint, que aparece na mesma tela: `https://<ref>.storage.supabase.co/storage/v1/s3`.
+5. Cole endpoint, região, chave e segredo nas variáveis do topo do notebook.
 
 > **Plano B:** se o storage cair no meio da aula, os mesmos 4 arquivos Parquet estão na pasta [`dados/`](../dados/) do repositório e podem ser enviados direto ao volume pela interface. O gabarito mostra o caminho completo, então dá para seguir a explicação mesmo sem rodar.
 
@@ -183,7 +185,7 @@ Abra [`00_esquenta_python.py`](./00_esquenta_python.py) e resolva os 10 exercíc
 
 ### 2. Data lake → bronze
 
-Abra [`01_ingestao_bronze.py`](./01_ingestao_bronze.py), conecte em **Serverless** e siga célula por célula. Como no esquenta, as variáveis já vêm prontas e o que falta é o código de cada etapa: criar o cliente S3, listar o bucket, baixar, guardar no landing e gravar a bronze. O [gabarito](./01_ingestao_bronze_gabarito.py) tem tudo escrito, para conferir depois (é ele que o Job executa).
+Abra [`01_ingestao_bronze.py`](./01_ingestao_bronze.py), conecte em **Serverless** e siga célula por célula. Como no esquenta, as configurações já vêm prontas e o que falta é o código de cada etapa: criar o cliente, listar os buckets, baixar o arquivo, transformar em DataFrame e gravar a bronze. O [gabarito](./01_ingestao_bronze_gabarito.py) tem tudo escrito, para conferir depois (é ele que o Job executa).
 
 O notebook começa **apagando** as tabelas que você subiu na mão na Aula 1. É proposital: no fim, elas voltam vindas do data lake, com a marca de quando e de onde chegaram.
 
@@ -215,7 +217,7 @@ Amanhã este Job ganha as tarefas de silver, gold e testes, e deixa de ser clica
 | Erro | Causa | Como resolver |
 |---|---|---|
 | `EndpointConnectionError` | Endpoint errado ou sem internet | Confira o endereço do Storage e a verificação da conta |
-| `InvalidAccessKeyId` / `SignatureDoesNotMatch` | Chave ou segredo errados | Recrie a chave no Supabase e atualize o secret scope |
+| `InvalidAccessKeyId` / `SignatureDoesNotMatch` | Chave ou segredo errados | Gere outra chave no Supabase e cole de novo |
 | `NoSuchBucket` | Nome do bucket errado | Confira a constante `S3_BUCKET` |
 | `KeyError: 'Contents'` | Bucket vazio | Faça o upload dos 4 Parquet |
 | `NoSuchKey` | Nome do arquivo diferente | Os arquivos precisam se chamar `vendas.parquet`, `produtos.parquet`… |

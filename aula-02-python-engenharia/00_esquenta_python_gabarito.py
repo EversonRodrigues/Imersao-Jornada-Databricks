@@ -196,94 +196,81 @@ display(df_estados[df_estados["regiao"] == "Norte"])
 # MAGIC %md
 # MAGIC ## 9. boto3: lendo arquivos do data lake
 # MAGIC
-# MAGIC O Storage do Supabase é compatível com o protocolo S3 da AWS, então o mesmo `boto3` funciona: muda apenas
-# MAGIC o `endpoint_url`. As chaves ficam em **Project Settings → Storage → S3 access keys** e são guardadas no
-# MAGIC secret scope do Databricks, nunca no notebook.
+# MAGIC O **boto3** é a biblioteca da AWS para falar com o **S3**, o serviço de arquivos na nuvem. O Storage do
+# MAGIC **Supabase** fala o mesmo protocolo, então o mesmo código serve para os dois: muda só o `endpoint_url`.
+# MAGIC
+# MAGIC | Termo | O que é |
+# MAGIC |---|---|
+# MAGIC | **Bucket** | A pasta raiz, o "balde" |
+# MAGIC | **Key** | O caminho do arquivo dentro do bucket, por exemplo `vendas.parquet` |
+# MAGIC | **Endpoint** | O endereço do serviço |
+# MAGIC | **Access key / secret** | Usuário e senha da máquina |
+# MAGIC
+# MAGIC > Na aula a chave fica no notebook, para ser simples de ver. Em produção ela sai daqui e vai para o
+# MAGIC > secret scope do Databricks, o que entra na Aula 3.
 
 # COMMAND ----------
 
+import boto3
+
 # copie do Supabase: Project Settings → Storage → S3 access keys
 S3_ENDPOINT = "https://pnkfrnjvvywiufphcqgw.storage.supabase.co/storage/v1/s3"
-S3_BUCKET = "ecommerce"
 S3_REGION = "us-east-2"
+S3_BUCKET = "ecommerce"
 
-if not S3_ENDPOINT:
-    print("Preencha S3_ENDPOINT para rodar esta célula.")
-else:
-    import boto3
+ACCESS_KEY = "XXXX"
+SECRET_KEY = "XXXX"
 
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=S3_ENDPOINT,                                   # https://<ref>.storage.supabase.co/storage/v1/s3
-        region_name=S3_REGION,
-        aws_access_key_id=dbutils.secrets.get("imersao", "s3_key"),
-        aws_secret_access_key=dbutils.secrets.get("imersao", "s3_secret"),
-    )
+s3 = boto3.client(
+    "s3",
+    endpoint_url=S3_ENDPOINT,
+    region_name=S3_REGION,
+    aws_access_key_id=ACCESS_KEY,
+    aws_secret_access_key=SECRET_KEY,
+)
 
-    # a resposta é um dicionário; os arquivos ficam na chave "Contents"
-    resposta = s3.list_objects_v2(Bucket=S3_BUCKET)
+# Listar buckets
+response = s3.list_buckets()
 
-    for objeto in resposta.get("Contents", []):
-        print(f"{objeto['Key']:<30} {objeto['Size']:>10,} bytes")
-
-    # a forma curta, com list comprehension
-    arquivos = [obj["Key"] for obj in resposta.get("Contents", [])]
-    print("\narquivos:", arquivos)
+for bucket in response["Buckets"]:
+    print(bucket["Name"])
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Baixando um arquivo e virando DataFrame
+# MAGIC Agora os arquivos de dentro do bucket. A resposta é um dicionário: os arquivos ficam em `Contents`, e
+# MAGIC cada um tem `Key` (o nome) e `Size` (o tamanho em bytes).
+
+# COMMAND ----------
+
+response = s3.list_objects_v2(Bucket=S3_BUCKET)
+
+for objeto in response["Contents"]:
+    print(f"{objeto['Key']:<30} {objeto['Size']:>10,} bytes")
+
+# a forma curta, com list comprehension
+arquivos = [objeto["Key"] for objeto in response["Contents"]]
+print("\narquivos:", arquivos)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 10. De bytes para tabela
 # MAGIC
 # MAGIC O `get_object` devolve um dicionário; o conteúdo está em `Body`, e o `.read()` transforma em bytes. O
 # MAGIC pandas espera um arquivo, e o que temos são bytes na memória: o `io.BytesIO` finge ser um arquivo.
 
 # COMMAND ----------
 
-if S3_ENDPOINT:
-    import io
+import io
 
-    objeto = s3.get_object(Bucket=S3_BUCKET, Key="vendas.parquet")
-    conteudo = objeto["Body"].read()
-    print(f"{len(conteudo):,} bytes baixados")
+objeto = s3.get_object(Bucket=S3_BUCKET, Key="vendas.parquet")
+conteudo = objeto["Body"].read()
+print(f"{len(conteudo):,} bytes baixados")
 
-    df_vendas = pd.read_parquet(io.BytesIO(conteudo))
-    print(df_vendas.shape)
-    display(df_vendas.head())
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ## 10. Escrevendo bytes em arquivo
-# MAGIC
-# MAGIC No pipeline, o arquivo baixado é guardado **sem nenhuma alteração** no volume (a pasta *landing*). Assim,
-# MAGIC se a transformação tiver um bug amanhã, você reprocessa a partir da cópia, sem voltar à origem.
-# MAGIC
-# MAGIC O `"wb"` do `open` quer dizer *write binary*: escrever bytes, e não texto. O `with` fecha o arquivo
-# MAGIC sozinho no fim do bloco, mesmo se der erro no meio.
-
-# COMMAND ----------
-
-pasta_landing = "/Volumes/ecommerce/bronze/arquivos/landing"
-dbutils.fs.mkdirs(pasta_landing)
-
-
-def guardar(conteudo: bytes, nome_arquivo: str) -> str:
-    """Grava os bytes recebidos no volume e devolve o caminho."""
-    destino = f"{pasta_landing}/{nome_arquivo}"
-    with open(destino, "wb") as arquivo:
-        arquivo.write(conteudo)
-    return destino
-
-
-if S3_ENDPOINT:
-    caminho = guardar(conteudo, "vendas.parquet")
-    print("gravado em:", caminho)
-
-    # conferindo: lendo de volta do volume
-    df_conferencia = pd.read_parquet(caminho)
-    print(df_conferencia.shape)
-    display(df_conferencia.head(3))
+df_vendas = pd.read_parquet(io.BytesIO(conteudo))
+print(df_vendas.shape)
+display(df_vendas.head())
 
 # COMMAND ----------
 
@@ -299,6 +286,15 @@ if S3_ENDPOINT:
 # MAGIC | `ModuleNotFoundError` | Biblioteca não instalada: rode `%pip install <nome>` |
 # MAGIC | `ConnectionError` ao chamar a API | Conta do Databricks ainda não verificada |
 # MAGIC | `EndpointConnectionError` | Endpoint errado; confira o endereço do Storage |
-# MAGIC | `InvalidAccessKeyId` / `SignatureDoesNotMatch` | Chave ou segredo errados no secret scope |
+# MAGIC | `InvalidAccessKeyId` / `SignatureDoesNotMatch` | Chave ou segredo errados |
 # MAGIC
-# MAGIC Pronto para o pipeline: siga para o **`01_ingestao_bronze`**.
+# MAGIC ## Fechando o esquenta
+# MAGIC
+# MAGIC Se você resolveu os 10 exercícios, tem tudo o que precisa para a aula:
+# MAGIC
+# MAGIC - sabe guardar valores e percorrer listas;
+# MAGIC - entende a resposta de uma API e a de um storage S3;
+# MAGIC - sabe transformar bytes em tabela com o pandas;
+# MAGIC - conhece as bibliotecas que o pipeline usa.
+# MAGIC
+# MAGIC Siga para o **`01_ingestao_bronze`**, onde os arquivos do data lake viram tabelas no Databricks.
