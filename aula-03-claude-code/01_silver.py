@@ -28,8 +28,8 @@ DINHEIRO = "decimal(10,2)"
 
 
 def bronze(tabela: str) -> DataFrame:
-    """Lê uma tabela bronze sem as colunas de controle da ingestão."""
-    return spark.table(f"{catalogo}.bronze.{tabela}").drop("_ingerido_em", "_origem")
+    """Lê uma tabela da camada bronze."""
+    return spark.table(f"{catalogo}.bronze.{tabela}")
 
 
 def gravar_silver(df: DataFrame, tabela: str) -> None:
@@ -66,14 +66,15 @@ gravar_silver(produtos, "produtos")
 # MAGIC %md
 # MAGIC ## Clientes + regiões do IBGE
 # MAGIC
-# MAGIC Primeiro achatamos o JSON (`regiao.nome` vira a coluna `regiao`), depois juntamos pela UF.
+# MAGIC A ingestão já achatou o JSON do IBGE, então a região chegou como `regiao_nome`. Aqui só renomeamos
+# MAGIC e juntamos pela UF.
 
 # COMMAND ----------
 
 estados = bronze("estados_ibge").select(
     F.col("sigla").alias("estado"),
     F.col("nome").alias("nome_estado"),
-    F.col("regiao.nome").alias("regiao"),
+    F.col("regiao_nome").alias("regiao"),
 )
 
 clientes = (

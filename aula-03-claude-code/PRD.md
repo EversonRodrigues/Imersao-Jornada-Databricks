@@ -16,22 +16,22 @@ E-commerce brasileiro com vendas em dois canais (site e loja física). Três dir
 
 - Databricks Free Edition, compute **serverless**.
 - Unity Catalog, catálogo `ecommerce`, schemas `bronze`, `silver` e `gold`.
-- Volume `ecommerce.bronze.arquivos` para arquivos brutos; subpasta `landing/` para o que o pipeline baixa.
 - Tudo implantado por **Declarative Automation Bundle** (`databricks.yml` na raiz).
 
 ## 3. Fontes
 
 | Fonte | Formato | Endereço | Conteúdo |
 |---|---|---|---|
-| Data lake (Storage do Supabase, protocolo S3) | Parquet | bucket e endpoint nas constantes do notebook de ingestão; arquivos `{tabela}.parquet` | `vendas`, `produtos`, `clientes`, `preco_competidores` |
+| Data lake (Storage do Supabase, protocolo S3) | Parquet | bucket `Datalake`, arquivos `{tabela}.parquet` | `vendas`, `produtos`, `clientes`, `preco_competidores` |
 | API do IBGE | JSON | `https://servicodados.ibge.gov.br/api/v1/localidades/estados` | 27 UFs com nome e região |
 
 ## 4. Camadas
 
 ### Bronze (`aula-02-python-engenharia/01_ingestao_bronze_gabarito.py`, Python) — Aula 2
-- Baixa cada Parquet do bucket S3 com `boto3` e copia para `landing/` sem alteração. Credenciais no secret scope `imersao` (`s3_key` e `s3_secret`); o widget `origem = arquivos` é o plano B, que lê os mesmos Parquet do GitHub.
-- Grava uma tabela Delta por fonte, **sobrescrevendo**, com as colunas extras `_ingerido_em` (timestamp da carga) e `_arquivo_origem` (caminho do arquivo).
-- Cria catálogo, schemas e volume se não existirem (**idempotente**).
+- Baixa cada Parquet do bucket S3 com `boto3`, lê com pandas e grava uma tabela Delta por arquivo, **sobrescrevendo**.
+- Enriquece com a API do IBGE (`bronze.estados_ibge`).
+- Cria catálogo e schema se não existirem (**idempotente**).
+- Credenciais no próprio notebook durante a aula; movê-las para o secret scope é tarefa da Aula 3.
 
 ### Silver (`aula-03-claude-code/01_silver.py`, PySpark) — Aula 3
 

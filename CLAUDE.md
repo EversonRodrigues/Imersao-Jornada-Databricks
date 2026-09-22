@@ -41,6 +41,7 @@ databricks experimental aitools tools query -p <perfil> -- "SELECT ..."
 ## Números de referência (para validar mudanças)
 
 - Receita total: R$ 974.077,28 (3.020 vendas); deve ser igual na silver e nas golds de vendas e clientes.
+- Bronze é gravada pela ingestão da Aula 2 direto do bucket `Datalake`, sem colunas de controle.
 - 20 vendas de produtos não cadastrados.
 - Segmentos: 10 VIP, 25 TOP_TIER e 15 REGULAR.
 - 35 produtos mais caros que todos os concorrentes.

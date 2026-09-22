@@ -51,7 +51,7 @@ O **S3** (*Simple Storage Service*) é o serviço de arquivos da AWS, e virou o 
 
 | Termo | O que é | Aqui |
 |---|---|---|
-| **Bucket** | A pasta raiz, o "balde" | `ecommerce` |
+| **Bucket** | A pasta raiz, o "balde" | `Datalake` |
 | **Key** | O caminho do arquivo dentro do bucket | `vendas.parquet` |
 | **Endpoint** | O endereço do serviço | `https://<ref>.storage.supabase.co/storage/v1/s3` |
 | **Access key / secret** | Usuário e senha da máquina | *Project Settings → Storage → S3 access keys* |
@@ -72,8 +72,8 @@ s3 = boto3.client(
 )
 
 s3.list_buckets()                                          # conferir a conexão
-s3.list_objects_v2(Bucket="ecommerce")                     # o que existe no bucket
-s3.get_object(Bucket="ecommerce", Key="vendas.parquet")    # baixar um arquivo
+s3.list_objects_v2(Bucket="Datalake")                      # o que existe no bucket
+s3.get_object(Bucket="Datalake", Key="vendas.parquet")     # baixar um arquivo
 ```
 
 O `boto3` é da AWS, mas o `endpoint_url` faz ele falar com qualquer storage compatível. O código que você escreve hoje funciona igual na Amazon.
@@ -117,7 +117,7 @@ Em um lakehouse o padrão é **ELT**: primeiro guardamos o dado bruto (é barato
 
 | Camada | Pergunta que ela responde | Quando |
 |---|---|---|
-| **Bronze** | "O que exatamente chegou, e quando?" | **Hoje.** `bronze.vendas`, `bronze.estados_ibge`… com `_ingerido_em` e `_origem` |
+| **Bronze** | "O que exatamente chegou?" | **Hoje.** `bronze.vendas`, `bronze.produtos`, `bronze.clientes`, `bronze.preco_competidores` e `bronze.estados_ibge` |
 | **Silver** | "Posso confiar neste dado?" | Aula 3 |
 | **Gold** | "Qual a resposta para o diretor?" | Aula 3 |
 
@@ -171,7 +171,7 @@ Se a silver falhar, a gold nem começa, e ninguém vê número errado. O Job rod
 
 **O data lake.** Você precisa de um bucket com os 4 arquivos Parquet (`vendas`, `produtos`, `clientes` e `preco_competidores`), que estão na pasta [`dados/`](../dados/). No Supabase:
 
-1. **Storage → New bucket**, nome `ecommerce`.
+1. **Storage → New bucket**, nome `Datalake`.
 2. Faça upload dos 4 arquivos `.parquet`.
 3. **Project Settings → Storage → S3 access keys → New access key**. Guarde as duas partes.
 4. Anote o endpoint, que aparece na mesma tela: `https://<ref>.storage.supabase.co/storage/v1/s3`.
@@ -218,7 +218,7 @@ Amanhã este Job ganha as tarefas de silver, gold e testes, e deixa de ser clica
 |---|---|---|
 | `EndpointConnectionError` | Endpoint errado ou sem internet | Confira o endereço do Storage e a verificação da conta |
 | `InvalidAccessKeyId` / `SignatureDoesNotMatch` | Chave ou segredo errados | Gere outra chave no Supabase e cole de novo |
-| `NoSuchBucket` | Nome do bucket errado | Confira a constante `S3_BUCKET` |
+| `NoSuchBucket` | Nome do bucket errado | Confira o nome usado no `list_objects_v2` |
 | `KeyError: 'Contents'` | Bucket vazio | Faça o upload dos 4 Parquet |
 | `NoSuchKey` | Nome do arquivo diferente | Os arquivos precisam se chamar `vendas.parquet`, `produtos.parquet`… |
 | `EndpointConnectionError` logo na primeira célula | `S3_ENDPOINT` com erro de digitação | Confira a constante no topo do notebook |
