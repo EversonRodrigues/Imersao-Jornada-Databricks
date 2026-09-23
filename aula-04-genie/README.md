@@ -8,7 +8,7 @@
 |---|---|
 | **Material** | [`01_preparar_dados_para_ia.sql`](./01_preparar_dados_para_ia.sql), [`genie/diretoria_ecommerce.geniespace.json`](./genie/diretoria_ecommerce.geniespace.json) e [`perguntas_demo.md`](./perguntas_demo.md) |
 | **Duração** | ~60 minutos de conteúdo |
-| **Pré-requisito** | Camada gold criada (Aula 2) |
+| **Pré-requisito** | Camada gold criada pelo pipeline (Aula 3) |
 
 ## Roteiro
 
@@ -91,16 +91,16 @@ Os dois se completam. No dashboard dá até para ligar um botão **Ask Genie** q
 
 ### 1. Documente o dado para a IA
 
-Abra [`01_preparar_dados_para_ia.sql`](./01_preparar_dados_para_ia.sql) e rode. Compare o `DESCRIBE TABLE` do começo (comentários vazios) com o do fim.
+Abra [`01_preparar_dados_para_ia.sql`](./01_preparar_dados_para_ia.sql) e rode. Ele mostra o que o Genie enxerga de cada tabela gold e por que cada comentário está ali.
 
-> Esse notebook também é a **última tarefa do Job diário**. Como a gold é recriada todo dia com `CREATE OR REPLACE`, os comentários precisam ser reaplicados depois dela.
+> Os comentários moram **na definição** das tabelas gold, no pipeline da Aula 3 (`aula-03-claude-code/pipeline/gold/*.sql`). Por isso sobrevivem a cada atualização diária, e o teste `gold: toda coluna tem comentário` impede que uma coluna nova chegue ao Genie sem explicação.
 
 ### 2. Crie o Genie space
 
 **Pela interface (recomendado na aula ao vivo):**
 
 1. Menu lateral **Genie → New**.
-2. **Data:** adicione `ecommerce.gold.vendas_temporais`, `vendas_produtos`, `clientes_segmentacao` e `precos_competitividade`. Warehouse: *Serverless Starter Warehouse*.
+2. **Data:** adicione `ecommerce.gold.vendas_temporais`, `vendas_produtos`, `clientes_segmentacao`, `precos_competitividade`, `vendas_detalhadas` e `qualidade_dados`. Warehouse: *Serverless Starter Warehouse*.
 3. Título: **Diretoria E-commerce**.
 4. **Instructions → General instructions:** cole o texto de `instructions.text_instructions` do arquivo [`genie/diretoria_ecommerce.geniespace.json`](./genie/diretoria_ecommerce.geniespace.json).
 5. **Instructions → SQL queries:** adicione os pares pergunta → SQL de `example_question_sqls`.

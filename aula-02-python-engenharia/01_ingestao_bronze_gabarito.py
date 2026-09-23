@@ -118,6 +118,9 @@ display(df_clientes)
 
 spark.sql("CREATE CATALOG IF NOT EXISTS ecommerce")
 spark.sql("CREATE SCHEMA IF NOT EXISTS ecommerce.bronze")
+# silver e gold são preenchidas pelo pipeline da Aula 3, que precisa encontrar os schemas prontos
+spark.sql("CREATE SCHEMA IF NOT EXISTS ecommerce.silver")
+spark.sql("CREATE SCHEMA IF NOT EXISTS ecommerce.gold")
 
 for tabela in ["vendas", "produtos", "clientes", "preco_competidores"]:
     spark.sql(f"DROP TABLE IF EXISTS ecommerce.bronze.{tabela}")

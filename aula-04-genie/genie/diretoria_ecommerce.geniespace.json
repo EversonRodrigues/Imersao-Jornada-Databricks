@@ -90,6 +90,54 @@
         ]
       },
       {
+        "identifier": "ecommerce.gold.qualidade_dados",
+        "column_configs": [
+          {
+            "column_name": "severidade",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          }
+        ]
+      },
+      {
+        "identifier": "ecommerce.gold.vendas_detalhadas",
+        "column_configs": [
+          {
+            "column_name": "canal_venda",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true,
+            "synonyms": [
+              "canal"
+            ]
+          },
+          {
+            "column_name": "categoria",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          },
+          {
+            "column_name": "receita",
+            "synonyms": [
+              "faturamento"
+            ]
+          },
+          {
+            "column_name": "regiao",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true
+          },
+          {
+            "column_name": "segmento_cliente",
+            "enable_entity_matching": true,
+            "enable_format_assistance": true,
+            "synonyms": [
+              "segmento",
+              "perfil"
+            ]
+          }
+        ]
+      },
+      {
         "identifier": "ecommerce.gold.vendas_produtos",
         "column_configs": [
           {
@@ -153,6 +201,8 @@
           "Perguntas por produto, categoria ou marca: use vendas_produtos. Para contar produtos use id_produto, porque há produtos diferentes com o mesmo nome.\n",
           "Perguntas sobre clientes, segmentos, estados ou regiões: use clientes_segmentacao. Segmentos: VIP (receita a partir de R$ 22.000), TOP_TIER (R$ 17.000 a R$ 21.999,99), REGULAR (abaixo de R$ 17.000).\n",
           "Perguntas de preço, concorrência ou competitividade: use precos_competitividade. Concorrentes monitorados: Mercado Livre, Amazon, Magalu e Shopee. diferenca_pct_vs_media está em pontos percentuais (10 = 10% mais caro). \"Mais caro que o mercado\" = diferenca_pct_vs_media > 0; \"mais caro que todos\" = classificacao_preco = 'MAIS_CARO_QUE_TODOS'.\n",
+          "Perguntas que cruzam dimensões de diretorias diferentes (por exemplo receita por região e categoria, ou canal preferido dos clientes VIP): use vendas_detalhadas, que tem uma linha por venda. Some receita e conte vendas com COUNT(*) ou COUNT(DISTINCT id_venda).\n",
+          "Perguntas sobre confiabilidade dos números, vendas de produtos não cadastrados ou preços suspeitos de concorrentes: use qualidade_dados. Os problemas conhecidos continuam incluídos na receita; possui_preco_suspeito = true em precos_competitividade indica preço de concorrente a confirmar.\n",
           "Ao comparar dias da semana, lembre que o período tem 5 sábados e 5 domingos, mas só 4 de cada dia útil. Mostre também a receita média por dia (SUM(receita) / COUNT(DISTINCT data)).\n",
           "Canais: ecommerce (site) e loja_fisica. Ao exibir, escreva \"E-commerce\" e \"Loja física\".\n",
           "Em rankings, ordene do maior para o menor e limite a 10 linhas, salvo pedido diferente."

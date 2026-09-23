@@ -42,7 +42,7 @@ GROUP BY categoria ORDER BY receita DESC LIMIT 3
 ```
 
 ### 5. Quem são os 5 melhores clientes?
-**Esperado:** Ana Sophia Pereira (MG, R$ 30.716,63), Melissa Pastor (AC, R$ 30.211,93), Murilo Da Mata (RR, R$ 28.285,82), Dr. Benício Gomes (AL, R$ 27.424,23) e Henrique Da Conceição (DF, R$ 26.687,99).
+**Esperado:** Ana Sophia Pereira (MG, R$ 30.716,63), Melissa Pastor (AC, R$ 30.211,93), Murilo Da Mata (RR, R$ 28.285,82), Benício Gomes (AL, R$ 27.424,23) e Henrique Da Conceição (DF, R$ 26.687,99).
 
 ```sql
 SELECT ranking_receita, nome_cliente, estado, receita

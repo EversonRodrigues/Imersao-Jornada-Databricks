@@ -1,0 +1,18 @@
+# Aula 3: silver e gold como Lakeflow Declarative Pipeline (antigo Delta Live Tables).
+# Cada arquivo em aula-03-claude-code/pipeline/ declara UMA tabela; o pipeline descobre as
+# dependências entre elas (silver.produtos antes de silver.vendas, silver antes de gold) e roda
+# na ordem certa, sem que ninguém precise escrever essa ordem.
+resources:
+  pipelines:
+    transformacao_ecommerce:
+      name: Transformação E-commerce (silver e gold)
+      catalog: ${var.catalogo}
+      # Schema padrão das tabelas sem prefixo; as golds são publicadas como gold.<tabela>.
+      schema: silver
+      serverless: true
+      # Roda sob demanda (pelo Job), e não continuamente.
+      continuous: false
+      root_path: ../aula-03-claude-code/pipeline
+      libraries:
+        - glob:
+            include: ../aula-03-claude-code/pipeline/**

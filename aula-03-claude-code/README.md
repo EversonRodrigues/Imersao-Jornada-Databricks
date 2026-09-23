@@ -1,23 +1,26 @@
-# Aula 3: Claude Code & Engenharia de Dados
+# Aula 3: Claude Code, Databricks CLI e o pipeline declarativo
 
-> **Objetivo do dia:** transformar o dado cru da bronze em tabelas em que o negócio confia (**silver** e **gold**) e fazer isso como profissional: código no Git, especificação escrita, testes que param o Job quando o dado está errado e deploy com um comando. Tudo com a IA como par de programação.
+> **Objetivo do dia:** transformar o dado cru da bronze em tabelas em que o negócio confia (**silver** e **gold**) e fazer isso como profissional: um **pipeline declarativo** com regras de qualidade, código no Git, especificação escrita, testes que param o Job quando o dado está errado e deploy com um comando. Tudo com a IA como par de programação.
 
 | | |
 |---|---|
-| **Notebooks** | [`01_silver.py`](./01_silver.py), [`02_gold.sql`](./02_gold.sql) e [`testes/03_testes_qualidade.py`](./testes/03_testes_qualidade.py) |
+| **Pipeline** | [`pipeline/silver/`](./pipeline/silver/) (PySpark) e [`pipeline/gold/`](./pipeline/gold/) (SQL): um arquivo por tabela |
+| **Testes** | [`testes/03_testes_qualidade.py`](./testes/03_testes_qualidade.py) |
+| **Prompts** | [`prompts/`](./prompts/): a Aula 3 inteira em 4 prompts (`prompt_01.md` a `prompt_04.md`) |
 | **Apoio** | [`PRD.md`](./PRD.md), [`CLAUDE.md`](../CLAUDE.md), [`databricks.yml`](../databricks.yml) e [`resources/`](../resources/) |
 | **Duração** | ~120 minutos |
-| **Pré-requisito** | Aula 2 feita; computador com terminal; conta no GitHub |
+| **Pré-requisito** | Aula 2 feita (bronze no ar); computador com terminal; conta no GitHub |
 
 ### Aula 2 × Aula 3: qual a diferença?
 
 | | Aula 2 | Aula 3 |
 |---|---|---|
-| O que entrega | A ingestão: o dado chega sozinho na bronze | A transformação: silver, gold e a garantia de que estão certas |
+| O que entrega | A ingestão: o dado chega sozinho na bronze | A modelagem: silver, gold e a garantia de que estão certas |
 | Ideia | **Eu construo e entendo** | **Eu profissionalizo com IA** |
 | Onde o código mora | Notebooks no workspace | Repositório Git |
+| Como a transformação roda | Célula por célula | Pipeline declarativo: eu digo *o que* cada tabela é, o Databricks descobre a ordem |
 | Como o Job existe | Clicado na interface | Arquivo YAML versionado |
-| Como sei que está certo | Olho o resultado | Testes automáticos falham o Job |
+| Como sei que está certo | Olho o resultado | Expectations e testes automáticos param o Job |
 | Como vai para produção | Rodo na mão | `databricks bundle deploy` |
 | Quem escreve o código | Eu | Eu, com o Claude Code executando e eu revisando |
 
@@ -25,212 +28,367 @@
 
 | Bloco | Tempo | O que acontece |
 |---|---|---|
-| Teoria | 15 min | Engenharia de software em dados, IA como par de programação |
-| Setup | 15 min | Git, Databricks CLI, autenticação e Claude Code |
-| Silver | 20 min | Limpar, tipar, enriquecer e marcar problemas (`01_silver.py`) |
-| Gold | 20 min | As tabelas de cada diretoria (`02_gold.sql`), com `CASE WHEN` e window functions |
-| Testes de qualidade | 15 min | O que testar e por que o Job deve falhar |
-| Nova feature com PRD | 20 min | `gold.vendas_por_regiao`, do PRD ao Job verde |
-| Deploy | 15 min | `dev` → `prod`, dashboard sobre a gold |
+| Teoria | 15 min | Objetivo de cada camada, pipeline declarativo, qualidade de dados, Claude Code, CLI e MCP |
+| Setup | 15 min | Databricks CLI, autenticação, Claude Code, plugin Databricks e MCP |
+| Passo 1 | 10 min | Criar uma materialized view **pela interface**, para entender o conceito |
+| Passo 2 | 25 min | Projeto do zero com o Claude Code: bronze → silver → gold |
+| Passos 3 e 4 | 20 min | Deploy do gabarito, números de referência e placar de qualidade |
+| Passo 5 | 10 min | Ver o pipeline falhar de propósito |
+| Passo 6 | 20 min | Nova feature a partir do PRD: `gold.vendas_por_regiao` |
+| Passo 7 | 5 min | `dev` → `prod` |
 
 ---
 
 ## Parte 1: base teórica
 
-### Dados também são software
+### O objetivo de cada camada
 
-Um pipeline de dados é código, e código em produção precisa das mesmas práticas de qualquer software:
+| Camada | Pergunta que responde | Neste projeto |
+|---|---|---|
+| **Bronze** | "O que a origem mandou?" | Cópia fiel do data lake e da API do IBGE, com todos os defeitos. Feita na Aula 2. |
+| **Silver** | "Posso confiar neste dado?" | Tipos certos (dinheiro em `DECIMAL`), receita calculada, cliente com região, e **cada problema de qualidade marcado e medido**. |
+| **Gold** | "Qual a resposta para o negócio?" | Uma tabela por pergunta das diretorias, documentada para o Genie e desenhada para o dashboard da Aula 4. |
+
+### Existe problema de qualidade neste dataset?
+
+Existe, e ele é mais sutil do que "valor vazio". O dado bruto não tem nulos, duplicatas nem números negativos, mas tem:
+
+| Problema | Quanto | O que a silver faz |
+|---|---|---|
+| Venda de produto que não existe no catálogo | 20 vendas, R$ 4.240,01 | Mantém a venda e marca `produto_cadastrado = false` |
+| Venda anterior à criação do produto | 5 vendas, R$ 325,88 | Marca `venda_antes_do_cadastro = true` |
+| Preço de concorrente exatamente pela metade do nosso | 55 preços (15 produtos) | Marca `preco_suspeito = true` |
+| Marca diferente da citada no nome ("Tênis Nike Air Max", marca Adidas) | 12 produtos | Aparece no placar de qualidade |
+| Pronome de tratamento no nome ("Sr.", "Dra.") | 11 clientes | Limpa `nome_cliente` e guarda o original em `nome_original` |
+
+**Por que marcar e não apagar?** Dinheiro que entrou é receita. Se a silver apagasse as 20 vendas sem cadastro, o faturamento cairia R$ 4.240,01 e ninguém saberia por quê. A regra é: o problema fica **visível e medido**, e alguém resolve na origem.
+
+### Lakeflow Declarative Pipelines (antigo Delta Live Tables)
+
+Na Aula 2 você escreveu **como** gravar cada tabela (`df.write.mode("overwrite").saveAsTable(...)`), na ordem certa, célula por célula. Num pipeline declarativo você escreve só **o que** cada tabela é, e o Databricks cuida do resto:
+
+| Você declara | O Databricks faz |
+|---|---|
+| "`silver.vendas` é esta consulta sobre `bronze.vendas` e `silver.produtos`" | Descobre que precisa calcular `silver.produtos` antes e monta o grafo de dependências |
+| "toda venda precisa ter quantidade positiva" (*expectation*) | Confere cada linha, mede quantas passaram e para o pipeline se a regra for crítica |
+| Nada sobre infraestrutura | Sobe o compute serverless, grava, otimiza e mostra tudo num grafo visual |
+
+### O que é `CREATE OR REFRESH MATERIALIZED VIEW`?
+
+É o comando que declara uma tabela dentro do pipeline. Por partes:
+
+- **`MATERIALIZED VIEW`**: uma view cujo resultado fica **gravado** como tabela. Quem consulta lê o dado pronto, rápido como uma tabela comum, mas o Databricks sabe qual consulta gera aquele dado e consegue recalculá-lo sozinho, às vezes só com o que mudou (refresh incremental).
+- **`CREATE OR REFRESH`**: "se ainda não existe, crie; se já existe, atualize com o dado novo". Rodar dez vezes dá o mesmo resultado que rodar uma: é idempotente, como a ingestão da Aula 2.
+- **A lista entre parênteses** declara as colunas com **tipo e comentário**. Se declarar a lista, declare todas as colunas do `SELECT`, com o tipo: sem o tipo, o comentário é ignorado em silêncio.
+
+```sql
+CREATE OR REFRESH MATERIALIZED VIEW gold.vendas_temporais (
+  data        DATE          COMMENT 'Data da venda.',
+  canal_venda STRING        COMMENT 'ecommerce ou loja_fisica.',
+  receita     DECIMAL(20,2) COMMENT 'Receita bruta em reais (R$).'   -- comentário de coluna, lido pelo Genie
+)
+COMMENT 'Vendas agregadas por dia, hora e canal.'   -- comentário da tabela
+AS
+SELECT data, canal_venda, SUM(receita) AS receita
+FROM silver.vendas
+GROUP BY data, canal_venda;
+```
+
+**Comparando com o que você já conhece:**
+
+| Comando | Onde roda | O que acontece |
+|---|---|---|
+| `CREATE OR REPLACE TABLE ... AS SELECT` | SQL editor, notebook | Apaga e recria a tabela; comentários adicionados depois se perdem. A ordem das tabelas é sua responsabilidade. |
+| `CREATE MATERIALIZED VIEW ... AS SELECT` | SQL editor (warehouse serverless) | Cria uma MV avulsa; você atualiza com `REFRESH MATERIALIZED VIEW nome`. |
+| `CREATE OR REFRESH MATERIALIZED VIEW ... AS SELECT` | **Dentro de um pipeline** | O pipeline cria ou atualiza, na ordem certa, com expectations, e os comentários fazem parte da definição. |
+
+> **Por que materialized view e não streaming table?** A ingestão da Aula 2 **sobrescreve** a bronze a cada execução. Uma streaming table só aceita linhas novas e quebraria com a sobrescrita; uma MV relê a fonte e recalcula. Streaming table é para fonte que só cresce (arquivos chegando, Kafka).
+
+### Expectations: a qualidade declarada junto da tabela
+
+```python
+@dp.materialized_view()
+@dp.expect_all_or_fail({"quantidade_positiva": "quantidade > 0"})   # nunca pode acontecer: para o pipeline
+@dp.expect("produto_cadastrado", "produto_cadastrado")               # problema conhecido: só mede
+def vendas():
+    ...
+```
+
+| Tipo | Python / SQL | Quando usar |
+|---|---|---|
+| **Warn** | `@dp.expect` / `CONSTRAINT ... EXPECT (...)` | Problema conhecido e tolerado: a linha passa e a métrica aparece no pipeline |
+| **Drop** | `@dp.expect_or_drop` / `... ON VIOLATION DROP ROW` | Linha inútil que pode ser descartada sem mudar número de negócio |
+| **Fail** | `@dp.expect_or_fail` / `... ON VIOLATION FAIL UPDATE` | Regra que nunca pode ser quebrada: melhor parar do que mostrar número errado |
+
+Expectations olham **uma linha por vez**. O que depende de várias linhas ou de várias tabelas (chave única, receita que bate entre silver e gold) fica no notebook de [testes](./testes/03_testes_qualidade.py), que roda depois do pipeline.
+
+### Claude Code, Databricks CLI e MCP: quem faz o quê
+
+| Ferramenta | O que é | Papel na aula |
+|---|---|---|
+| **Databricks CLI** | O Databricks pelo terminal: `databricks bundle deploy`, `databricks pipelines ...`, consultas SQL | As "mãos" que mexem no workspace |
+| **Claude Code** | Agente de IA no terminal que lê o projeto, edita arquivos e roda comandos (inclusive a CLI) | O par de programação |
+| **Plugin Databricks** (skills) | Instruções prontas que ensinam o Claude Code a usar a CLI, bundles e pipelines do jeito certo | O "manual" que o agente consulta |
+| **MCP** (Model Context Protocol) | Padrão aberto para conectar uma IA a sistemas externos. O Databricks oferece servidores MCP gerenciados (SQL, Genie, funções do Unity Catalog) | Deixa a IA consultar o workspace direto, sem passar pela CLI |
+
+**Skills × MCP:** a skill ensina *como* fazer (qual comando, qual sintaxe). O MCP dá *acesso* a um sistema (rodar SQL, perguntar ao Genie). Na aula usamos os dois: o plugin para construir o projeto e o MCP de SQL para explorar os dados.
+
+### Dados também são software
 
 | Prática | Em dados significa | Neste projeto |
 |---|---|---|
-| **Versionamento** | Todo notebook, SQL e configuração no Git, com histórico de quem mudou o quê | Repositório no GitHub |
-| **Infraestrutura como código** | Job, dashboard e permissões descritos em arquivo, e não em cliques | `databricks.yml` + `resources/*.yml` |
+| **Versionamento** | Todo código e configuração no Git | Repositório no GitHub |
+| **Infraestrutura como código** | Job, pipeline, dashboard e permissões em arquivo, e não em cliques | `databricks.yml` + `resources/*.yml` |
 | **Ambientes separados** | Testar sem estragar o que os diretores estão vendo | Targets `dev` e `prod` |
-| **Testes** | Provar que o dado está certo antes de alguém usar | `testes/03_testes_qualidade.py` |
-| **Especificação** | Escrever o que o sistema deve fazer antes de fazer | `PRD.md` |
-
-### Declarative Automation Bundles (antigos Databricks Asset Bundles)
-
-Um bundle é o projeto Databricks descrito em arquivos. O `databricks.yml` diz **o que** deve existir no workspace, e a CLI cuida de criar, atualizar ou apagar o que for preciso.
-
-```
-databricks.yml                       ← nome do projeto, variáveis e ambientes (dev, prod)
-resources/
-├── pipeline_ecommerce.job.yml       ← o Job da Aula 2, agora com testes e documentação
-├── diretoria_aula01.dashboard.yml   ← dashboard da Aula 1 (sobre a bronze)
-├── diretoria_gold.dashboard.yml     ← o mesmo painel sobre a gold
-└── diretoria.genie_space.yml        ← o Genie da Aula 4
-```
-
-| Comando | O que faz |
-|---|---|
-| `databricks bundle validate --strict` | Confere se a configuração está correta, sem mudar nada |
-| `databricks bundle deploy -t dev` | Sobe os arquivos e cria ou atualiza os recursos no ambiente `dev` |
-| `databricks bundle run pipeline_ecommerce -t dev` | Executa o Job e mostra o resultado de cada tarefa |
-| `databricks bundle summary -t prod` | Lista os recursos implantados e seus links |
-| `databricks bundle destroy -t dev` | Remove tudo o que o bundle criou naquele ambiente |
-
-**Ambientes (targets):**
-- `dev` (modo *development*): os recursos ganham o prefixo `[dev seu_usuario]` e o agendamento fica **pausado**. É para experimentar.
-- `prod` (modo *production*): nomes limpos e Job agendado todo dia às 6h. É o que os diretores usam.
-
-### Testes de qualidade de dados
-
-Teste de software verifica se o **código** faz o que deveria. Teste de dados verifica se o **dado** que chegou está como deveria, porque o código pode estar perfeito e a fonte mandar lixo.
-
-| Tipo | Pergunta | Exemplo no projeto |
-|---|---|---|
-| Unicidade | Existe ID repetido? | `id_venda` único na silver |
-| Não nulo | Campo obrigatório vazio? | Toda venda tem cliente, produto e preço |
-| Domínio | Valor fora da lista? | Canal só `ecommerce` ou `loja_fisica` |
-| Regra de negócio | A regra foi aplicada certo? | VIP tem receita ≥ R$ 22.000 |
-| Reconciliação | O total bate entre camadas? | Receita da silver = receita de cada gold |
-| Limite tolerado | Um problema conhecido cresceu? | Vendas sem cadastro abaixo de 1% |
-
-Cada teste é uma consulta que **conta linhas com problema**. Zero é sucesso. Qualquer outro número faz o notebook levantar um erro, o Job fica vermelho, você recebe um e-mail, e a tarefa seguinte (que documenta o dado para o Genie) nem roda.
-
-### IA como par de programação
-
-O **Claude Code** é um agente que roda no terminal, dentro da pasta do projeto. Diferente de um chat, ele:
-
-- **lê** os arquivos do repositório para entender o contexto;
-- **edita** arquivos e mostra o que mudou;
-- **executa** comandos (`databricks bundle validate`, consultas SQL, `git`), lê o resultado e corrige o que deu errado;
-- **pede permissão** antes de ações que alteram coisas.
-
-Três arquivos fazem a IA trabalhar bem:
-
-| Arquivo | Papel |
-|---|---|
-| [`CLAUDE.md`](../CLAUDE.md) | A "memória" do projeto: estrutura, comandos, convenções e números de referência. O Claude Code lê automaticamente ao abrir a pasta. |
-| [`PRD.md`](./PRD.md) | O que o sistema deve fazer. Você muda o PRD, e a IA implementa a partir dele. |
-| Os testes | A forma objetiva de saber se a IA acertou. |
-
-> **Regra de ouro:** a IA escreve, **você revisa**. Leia cada diff, rode os testes, confira os números de referência. Quem responde pelo número do diretor é você.
-
-### Alternativa gratuita: Genie Code
-
-O Claude Code é uma ferramenta paga (precisa de um plano Claude Pro, Max ou de uma chave de API). Se você não tem assinatura, dá para acompanhar a aula com o **Genie Code**, o assistente de código que já vem dentro do Databricks, inclusive na Free Edition:
-
-- abra um notebook e use o assistente para gerar, explicar ou refatorar células;
-- use o **Git folder** para fazer commit e push pela interface;
-- faça o deploy do bundle pela interface (botão de deploy no Git folder), sem instalar a CLI.
-
-Você perde a execução de comandos no seu computador, mas o fluxo PRD → código → teste → deploy é o mesmo.
+| **Testes** | Provar que o dado está certo antes de alguém usar | Expectations + `testes/03_testes_qualidade.py` |
+| **Especificação** | Escrever o que o sistema deve fazer antes de fazer | [`PRD.md`](./PRD.md) |
 
 ---
 
 ## Parte 2: setup (faça antes da aula se puder)
 
-### 1. Git e o repositório
+### 1. Instale a Databricks CLI
 
-```bash
-# faça um fork de github.com/lvgalvao/Imersao-Jornada-Databricks no GitHub, depois:
-git clone https://github.com/SEU_USUARIO/Imersao-Jornada-Databricks.git
-cd Imersao-Jornada-Databricks
-```
-
-### 2. Databricks CLI
+Documentação oficial: [docs.databricks.com/aws/en/dev-tools/cli/install](https://docs.databricks.com/aws/en/dev-tools/cli/install).
 
 | Sistema | Comando |
 |---|---|
 | macOS | `brew tap databricks/tap && brew install databricks` |
-| Windows | `winget install Databricks.DatabricksCLI` |
+| Windows (PowerShell) | `winget install Databricks.DatabricksCLI` |
 | Linux | `curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh \| sh` |
 
-Confira com `databricks --version` (precisa ser 0.281 ou mais recente; este projeto foi testado na 1.13).
+Feche e abra o terminal, e confira:
 
-### 3. Autenticação no workspace
+```bash
+databricks -v
+```
+
+Este projeto foi testado na versão 1.13. Se aparecer algo abaixo de 0.281, atualize (`brew upgrade databricks` ou `winget upgrade Databricks.DatabricksCLI`).
+
+### 2. Autentique no seu workspace
 
 Pegue a URL do seu workspace (o endereço do navegador até `.com`, por exemplo `https://dbc-1234abcd-5678.cloud.databricks.com`).
-
-**Opção A, login pelo navegador (recomendado):**
 
 ```bash
 databricks auth login --host https://SEU-WORKSPACE.cloud.databricks.com --profile imersao
 ```
 
-**Opção B, token pessoal:**
-1. No Databricks: seu avatar → **Settings → Developer → Access tokens → Generate new token**.
-2. No terminal:
-   ```bash
-   databricks configure --host https://SEU-WORKSPACE.cloud.databricks.com --profile imersao
-   # cole o token quando pedir
-   ```
-
-Teste: `databricks current-user me -p imersao`.
-
-> **Validado na Free Edition:** login pelo navegador, criação de token pessoal, `bundle deploy` e `bundle run` funcionam. Um detalhe: a API não cria catálogo na Free Edition (falta um local de armazenamento), mas o SQL `CREATE CATALOG` funciona. Por isso o pipeline cria o catálogo com SQL.
-
-### 4. Claude Code
+O navegador abre, você faz login e a CLI grava o perfil `imersao` em `~/.databrickscfg`. Confira:
 
 ```bash
-curl -fsSL https://claude.ai/install.sh | bash     # macOS / Linux
-# Windows (PowerShell): irm https://claude.ai/install.ps1 | iex
+databricks auth profiles                 # lista os perfis e se estão válidos
+databricks current-user me -p imersao    # mostra seu usuário
 ```
 
-Dentro da pasta do projeto, rode `claude` e faça login com sua conta Claude.
+> Todo comando da aula leva `-p imersao`. Sem ele, a CLI procura um perfil padrão e dá `cannot configure default credentials`.
+
+### 3. Instale o Claude Code
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash      # macOS / Linux
+irm https://claude.ai/install.ps1 | iex              # Windows (PowerShell)
+```
+
+Confira com `claude --version`. Na primeira vez que rodar `claude`, ele abre o navegador para você entrar com sua conta Claude (plano Pro, Max ou chave de API).
+
+### 4. Instale o plugin Databricks no Claude Code
+
+Dentro do `claude`, digite:
+
+```
+/plugin install databricks@claude-plugins-official
+```
+
+O plugin traz as skills da Databricks (CLI, bundles, pipelines, jobs, dashboards, Genie). Não é preciso chamá-las pelo nome: quando você pede algo de Databricks, o Claude Code carrega a skill certa sozinho. Rode `/plugin` para ver o que está instalado.
+
+### 5. Conecte o MCP de SQL do Databricks
+
+O servidor MCP gerenciado de SQL deixa o Claude Code rodar consultas no seu workspace. Crie um token (seu avatar → **Settings → Developer → Access tokens → Generate new token**) e rode no terminal:
+
+```bash
+claude mcp add --transport http databricks-sql \
+  https://SEU-WORKSPACE.cloud.databricks.com/api/2.0/mcp/sql \
+  --header "Authorization: Bearer SEU_TOKEN"
+```
+
+Dentro do `claude`, `/mcp` mostra se a conexão está ativa. Outros servidores gerenciados seguem o mesmo formato, como o do Genie (`/api/2.0/mcp/genie/{id_do_genie_space}`), que vamos usar na Aula 4. A lista completa está em [Managed MCP servers](https://docs.databricks.com/aws/en/generative-ai/mcp/managed-mcp).
+
+> **Cuidado com o token:** ele dá acesso ao seu workspace. Não cole em arquivo do repositório nem em print. Se vazar, revogue na mesma tela onde criou.
+>
+> Se o MCP gerenciado não estiver disponível no seu workspace, siga sem ele: o plugin Databricks faz as mesmas consultas pela CLI (`databricks experimental aitools tools query`).
+
+### Alternativa gratuita: Genie Code
+
+O Claude Code é pago. Sem assinatura, dá para acompanhar a aula com o **Genie Code**, o assistente que já vem no Databricks, inclusive na Free Edition: ele gera e explica código dentro do editor de pipelines e dos notebooks. Você perde a execução de comandos no seu computador, mas o fluxo PRD → código → qualidade → deploy é o mesmo.
 
 ---
 
-## Parte 3: a aula na prática
+## Parte 3: a aula passo a passo
 
-### 1. Primeiro deploy
+### Passo 1: sua primeira materialized view, pela interface
+
+Antes de automatizar, vale ver o conceito com as próprias mãos.
+
+1. No menu lateral do Databricks, clique em **Jobs & Pipelines → Create → ETL pipeline**.
+2. Preencha:
+   - **Name:** `minha_primeira_mv`
+   - **Default catalog:** `ecommerce`
+   - **Default schema:** `silver`
+3. Escolha **Start with an empty file** e a linguagem **SQL**. Abre o editor de pipelines, com um arquivo em branco.
+4. Cole:
+
+   ```sql
+   CREATE OR REFRESH MATERIALIZED VIEW receita_por_canal (
+     CONSTRAINT receita_positiva EXPECT (receita > 0) ON VIOLATION FAIL UPDATE
+   )
+   COMMENT 'Teste da Aula 3: receita por canal a partir da bronze.'
+   AS
+   SELECT
+     canal_venda,
+     COUNT(*)                                          AS total_vendas,
+     CAST(SUM(quantidade * preco_unitario) AS DECIMAL(12,2)) AS receita
+   FROM bronze.vendas
+   GROUP BY canal_venda;
+   ```
+
+5. Clique em **Run pipeline**. Na primeira vez o serverless leva um ou dois minutos para subir.
+6. Observe:
+   - o **grafo**, com `receita_por_canal` e a seta vindo de `bronze.vendas`;
+   - a aba de **qualidade de dados** da tabela, com a expectation `receita_positiva` e quantas linhas passaram;
+   - no **Catalog Explorer**, `ecommerce.silver.receita_por_canal` com o tipo *Materialized view* e o comentário.
+7. Rode de novo: a tabela é atualizada, e não duplicada. É o `OR REFRESH`.
+8. Troque a condição para `receita > 1000000` e rode: o pipeline **falha** e a tabela continua com o dado anterior. É o `FAIL UPDATE` protegendo o diretor.
+9. Limpeza: apague o pipeline (menu ⋮ → **Delete**). A MV criada por ele é apagada junto.
+
+> **E sem pipeline?** No **SQL editor**, com o warehouse serverless, dá para criar uma MV avulsa com `CREATE MATERIALIZED VIEW ... AS SELECT ...` e atualizar com `REFRESH MATERIALIZED VIEW nome`. Serve para uma tabela solta; para uma cadeia silver → gold com qualidade, o pipeline é o lugar certo.
+
+Clicar funciona para uma tabela. Para dez tabelas, dois ambientes e um Job diário, vamos para o código.
+
+### Passo 2: o projeto do zero, com o Claude Code
+
+Aqui você refaz o que está pronto neste repositório, começando de uma pasta vazia, como faria numa empresa. O repositório serve de **gabarito**.
+
+**2.1. Crie o esqueleto do projeto com a CLI**
 
 ```bash
+mkdir ecommerce-pipeline && cd ecommerce-pipeline
+databricks pipelines init -p imersao
+```
+
+Responda às perguntas: nome `ecommerce_pipeline`, catálogo `ecommerce`, schema pessoal **no**, linguagem **python**. A CLI cria um bundle (`databricks.yml`), um recurso de pipeline em `resources/` e uma pasta `transformations/` com exemplos.
+
+**2.2. Abra o Claude Code**
+
+```bash
+claude
+```
+
+**2.3. Os 4 prompts**
+
+O projeto inteiro da Aula 3 sai de quatro prompts, um por arquivo em [`prompts/`](./prompts/) (`prompt_01.md` a `prompt_04.md`):
+
+| # | Prompt | O que sai |
+|---|---|---|
+| 1 | A silver | Convenções no `CLAUDE.md`, 4 tabelas silver com expectations e o placar `gold.qualidade_dados` |
+| 2 | Diretoria Comercial | `gold.vendas_temporais`, `gold.vendas_produtos`, `gold.vendas_detalhadas`, notebook de testes e o Job |
+| 3 | Diretoria de Customer Success | `gold.clientes_segmentacao` |
+| 4 | Diretoria de Pricing | `gold.precos_competitividade` |
+
+Cada prompt traz o contexto, as regras de negócio, as colunas que o dashboard e o Genie da Aula 4 esperam e os números para conferir no fim. Entre um prompt e outro, **revise**: leia os arquivos que ele criou, confira os números e pergunte o porquê do que não entendeu.
+
+Compare o resultado com o gabarito ([`pipeline/`](./pipeline/)). Não precisa ser idêntico, mas os números de referência (Passo 4) precisam bater.
+
+### Passo 3: deploy do gabarito
+
+De volta a este repositório:
+
+```bash
+cd Imersao-Jornada-Databricks
 databricks bundle validate --strict -t dev -p imersao
 databricks bundle deploy -t dev -p imersao
 databricks bundle run pipeline_ecommerce -t dev -p imersao
 ```
 
-Se o seu fork ainda não tem a pasta `dados/` publicada, passe a origem dos arquivos:
+O Job tem 3 tarefas:
 
-```bash
-databricks bundle run pipeline_ecommerce -t dev -p imersao \
-  --params url_base=https://raw.githubusercontent.com/lvgalvao/Imersao-Jornada-Databricks/main/dados
+```
+ingestao_bronze  →  transformacao (pipeline: 4 silvers + 6 golds)  →  testes_qualidade
 ```
 
-Resultado esperado: as 5 tarefas verdes (`ingestao_bronze`, `silver`, `gold`, `testes_qualidade` e `documentar_para_genie`).
+Abra o pipeline **[dev seu_usuario] Transformação E-commerce** no workspace e veja o grafo: ninguém escreveu a ordem das tabelas, o pipeline deduziu pelas consultas.
 
-### 2. Construindo a silver e a gold
+> **Já rodou a versão antiga da Aula 3?** As tabelas `silver.*` e `gold.*` antigas são tabelas comuns, e uma materialized view não assume o lugar de uma tabela que já existe. Apague-as uma vez antes do primeiro run (SQL editor): `DROP TABLE IF EXISTS ecommerce.silver.vendas;` e o mesmo para `produtos`, `clientes`, `preco_competidores`, `gold.vendas_temporais`, `gold.vendas_produtos`, `gold.clientes_segmentacao` e `gold.precos_competitividade`.
 
-Rode [`01_silver.py`](./01_silver.py) e [`02_gold.sql`](./02_gold.sql), nessa ordem, e confira:
+### Passo 4: números de referência e placar de qualidade
 
 | O que conferir | Esperado |
 |---|---|
-| `silver.vendas` com produto não cadastrado | 20 linhas |
+| Receita total | R$ 974.077,28 (3.020 vendas) na silver e em `vendas_temporais`, `vendas_produtos`, `clientes_segmentacao` e `vendas_detalhadas` |
 | Clientes por região | Norte 17, Nordeste 12, Centro-Oeste 9, Sudeste 8 e Sul 4 |
-| Reconciliação da receita | R$ 974.077,28 na silver e em todas as golds |
 | `gold.clientes_segmentacao` | 10 VIP, 25 TOP_TIER e 15 REGULAR |
 | `gold.precos_competitividade` | 35 produtos mais caros que todos os concorrentes |
 
-> **Por que PySpark na silver e SQL na gold?** Limpeza é uma sequência de passos pequenos, e cada passo vira uma linha de Python fácil de testar. Já as regras de negócio da gold são escritas em SQL, a língua que o analista e o diretor leram na Aula 1.
+E o placar, em `gold.qualidade_dados`:
 
-### 3. Conhecendo o projeto com o Claude Code
+| Regra | Severidade | Linhas | Receita afetada |
+|---|---|---:|---:|
+| Venda de produto não cadastrado | ALERTA | 20 | R$ 4.240,01 |
+| Venda anterior à criação do produto | ALERTA | 5 | R$ 325,88 |
+| Preço de concorrente abaixo de 60% do nosso | ALERTA | 55 | |
+| Marca do produto diferente da marca citada no nome | ALERTA | 12 | |
+| Produto com nome igual ao de outro produto | INFORMATIVO | 137 | |
+| Produto monitorado em menos de 4 concorrentes | INFORMATIVO | 109 | |
+| Nome de cliente com pronome de tratamento | CORRIGIDO | 11 | |
 
-Abra o `claude` na pasta e experimente:
+No pipeline, clique em `vendas` e abra a aba de qualidade de dados: `produto_cadastrado` mostra 20 linhas com falha (warn), e as regras de `fail` mostram 100% de aprovação.
+
+As mesmas métricas ficam no **event log** do pipeline, que dá para consultar em SQL:
+
+```sql
+SELECT
+  origin.flow_name  AS tabela,
+  e.name            AS regra,
+  e.passed_records  AS passou,
+  e.failed_records  AS falhou
+FROM (
+  SELECT origin, timestamp, explode(from_json(
+    details:flow_progress:data_quality:expectations,
+    'array<struct<name:string, passed_records:bigint, failed_records:bigint>>'
+  )) AS e
+  FROM event_log(TABLE(ecommerce.silver.vendas))   -- qualquer tabela do pipeline serve
+  WHERE event_type = 'flow_progress'
+    AND details:flow_progress:data_quality IS NOT NULL
+)
+QUALIFY ROW_NUMBER() OVER (PARTITION BY tabela, regra ORDER BY timestamp DESC) = 1
+ORDER BY tabela, regra;
+```
+
+| Tabela | Regra | Falhou |
+|---|---|---:|
+| `silver.vendas` | `produto_cadastrado` (warn) | 20 |
+| `silver.vendas` | `venda_depois_do_cadastro` (warn) | 5 |
+| `silver.preco_competidores` | `preco_plausivel` (warn) | 55 |
+| todas | regras `fail` | 0 |
+
+Peça ao Claude Code (com o MCP de SQL ou a CLI):
 
 ```
-Explique a arquitetura deste projeto e o caminho de uma venda desde o arquivo Parquet até o dashboard.
+Confira no workspace (perfil imersao) os números de referência do CLAUDE.md e me mostre a
+tabela gold.qualidade_dados.
 ```
 
-```
-Rode os testes de qualidade contra o workspace (perfil imersao) e me diga se algum número
-foge dos valores de referência do CLAUDE.md.
-```
-
-### 4. Veja um teste falhar (de propósito)
-
-Peça ao Claude Code:
+### Passo 5: veja o pipeline falhar (de propósito)
 
 ```
-Mude o limite de produtos não cadastrados em testes/03_testes_qualidade.py de 1% para 0,5%,
-faça o deploy em dev e rode o Job. Me explique o que aconteceu.
+Em pipeline/silver/vendas.py, mova a regra produto_cadastrado de @dp.expect_all para
+@dp.expect_all_or_fail. Faça o deploy em dev, rode o Job e me explique o que aconteceu.
 ```
 
-O teste falha (são 0,66% de vendas sem cadastro), o Job fica vermelho e a tarefa `documentar_para_genie` não roda. É isso que você quer em produção: **parar antes de mostrar número errado**. Depois, peça para voltar o limite.
+O pipeline para em `silver.vendas`, nenhuma gold é recalculada, `testes_qualidade` nem roda e você recebe um e-mail. É isso que você quer em produção: **parar antes de mostrar número errado**. Depois, peça para desfazer.
 
-### 5. Nova feature a partir do PRD
+Faça o mesmo com um teste entre tabelas: troque o limite de produtos não cadastrados de 1% para 0,5% em `testes/03_testes_qualidade.py`. O real é 0,66%, então o Job fica vermelho na última tarefa.
+
+### Passo 6: nova feature a partir do PRD
 
 A seção 9 do [`PRD.md`](./PRD.md) descreve `gold.vendas_por_regiao`. Peça:
 
@@ -240,25 +398,23 @@ Antes de editar, me mostre o plano. Depois do deploy em dev, rode o Job e confir
 a reconciliação da receita.
 ```
 
-Revise o que ele propõe, aprove, e acompanhe:
-1. a nova tabela em `03_gold.sql`;
+Revise o que ele propõe, aprove e acompanhe:
+1. o novo arquivo `pipeline/gold/vendas_por_regiao.sql`, com comentários em todas as colunas;
 2. o novo teste de reconciliação;
-3. os comentários para o Genie;
-4. `bundle validate`, `deploy` e `run` até ficar verde.
+3. `bundle validate`, `deploy` e `run` até ficar verde.
 
-### 6. Commit e produção
+> Esqueceu um comentário de coluna? O teste `gold: toda coluna tem comentário` pega.
+
+### Passo 7: commit e produção
 
 ```bash
 git add -A && git commit -m "Adiciona gold.vendas_por_regiao"
 git push
 databricks bundle deploy -t prod -p imersao
+databricks bundle summary -t prod -p imersao    # links do Job, do pipeline e do dashboard
 ```
 
-Em `prod`, o Job fica agendado para todo dia às 6h, e o dashboard **Diretoria E-commerce** passa a ler da gold. Encontre os links com:
-
-```bash
-databricks bundle summary -t prod -p imersao
-```
+Em `prod`, o Job fica agendado para todo dia às 6h, e o dashboard **Diretoria E-commerce** lê da gold.
 
 ---
 
@@ -268,10 +424,13 @@ databricks bundle summary -t prod -p imersao
 |---|---|---|
 | `cannot configure default credentials` | Faltou o perfil | Use `-p imersao` em todo comando |
 | `Metastore storage root URL does not exist` | Tentou criar catálogo pela API | Crie com SQL (`CREATE CATALOG IF NOT EXISTS ecommerce`) ou rode a Aula 1 |
+| Pipeline falha dizendo que a tabela já existe ou não é gerenciada por ele | Tabela antiga criada por notebook com o mesmo nome | `DROP TABLE` na tabela antiga (Passo 3) e rode de novo |
+| `CREATE OR REPLACE MATERIALIZED VIEW` rejeitado no pipeline | Sintaxe do SQL editor, não do pipeline | Dentro do pipeline é `CREATE OR REFRESH` |
+| Pipeline parado em *Initializing* | Primeira subida do serverless | Espere alguns minutos; não cancele |
+| Pipeline vermelho com `EXPECTATION_VIOLATION` | Uma regra `fail` foi quebrada | Abra a tabela no grafo → aba de qualidade: mostra a regra e as linhas |
 | `warehouse "Serverless Starter Warehouse" not found` | O warehouse foi renomeado | Ajuste `variables.warehouse_id.lookup` no `databricks.yml` |
-| `HTTPError: 404` na ingestão | `url_base` aponta para um fork sem a pasta `dados/` | Passe `--params url_base=...` |
-| Job vermelho em `testes_qualidade` | Algum teste encontrou problema | Abra a saída da tarefa: a tabela mostra qual teste falhou e quantas linhas |
+| Job vermelho em `testes_qualidade` | Algum teste entre tabelas encontrou problema | A saída da tarefa mostra qual teste falhou e quantas linhas |
 
 ## Amanhã
 
-O dado está organizado, testado e atualizado todo dia. Na [Aula 4](../aula-04-genie/) os diretores deixam de depender de você para perguntar: eles vão conversar com a gold em português, pelo **Genie**.
+O dado está organizado, com qualidade medida, documentado e atualizado todo dia. Na [Aula 4](../aula-04-genie/) os diretores deixam de depender de você para perguntar: eles conversam com a gold em português, pelo **Genie**, e acompanham tudo no dashboard.

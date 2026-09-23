@@ -134,7 +134,7 @@ Os arquivos estão em [`dados/`](./dados/), em CSV (Aula 1) e Parquet (Aula 2).
 ├── README.md                          ← você está aqui
 ├── CLAUDE.md                          ← contexto do projeto para o Claude Code (Aula 3)
 ├── databricks.yml                     ← o projeto inteiro como código (Aula 3)
-├── resources/                         ← Job, dashboards e Genie declarados em YAML
+├── resources/                         ← Job, pipeline, dashboards e Genie declarados em YAML
 ├── dados/                             ← CSVs e Parquets do e-commerce
 ├── aula-01-sql-dashboard/
 │   ├── 00_o_desafio.sql               ← o desafio: diretores, dados e as 12 perguntas
@@ -144,9 +144,10 @@ Os arquivos estão em [`dados/`](./dados/), em CSV (Aula 1) e Parquet (Aula 2).
 │   ├── 00_esquenta_python.py          ← exercícios de Python (e o gabarito)
 │   └── 01_ingestao_bronze.py          ← data lake + API → bronze (e o gabarito)
 ├── aula-03-claude-code/
-│   ├── 01_silver.py                   ← limpeza e enriquecimento
-│   ├── 02_gold.sql                    ← tabelas de negócio
+│   ├── pipeline/silver/               ← limpeza, enriquecimento e expectations (PySpark)
+│   ├── pipeline/gold/                 ← tabelas de negócio documentadas (SQL)
 │   ├── PRD.md                         ← especificação do pipeline para a IA
+│   ├── prompts/                       ← a Aula 3 inteira em 4 prompts (prompt_01.md a prompt_04.md)
 │   ├── testes/03_testes_qualidade.py  ← testes que param o Job se o dado estiver errado
 │   └── dashboard/                     ← dashboard lendo da gold
 └── aula-04-genie/
@@ -159,7 +160,7 @@ Os arquivos estão em [`dados/`](./dados/), em CSV (Aula 1) e Parquet (Aula 2).
 
 ## Atalho: o projeto inteiro com um comando
 
-Se você já tem a [Databricks CLI](https://docs.databricks.com/dev-tools/cli/install.html) configurada, dá para implantar tudo (Job, dashboards e Genie) de uma vez. Isso é o que a Aula 3 ensina em detalhes:
+Se você já tem a [Databricks CLI](https://docs.databricks.com/aws/en/dev-tools/cli/install) configurada (o passo a passo de instalação da CLI e do Claude Code está no [README da Aula 3](./aula-03-claude-code/README.md#parte-2-setup-faça-antes-da-aula-se-puder)), dá para implantar tudo (Job, dashboards e Genie) de uma vez. Isso é o que a Aula 3 ensina em detalhes:
 
 ```bash
 databricks bundle deploy -t prod            # cria Job, 2 dashboards e o Genie space
