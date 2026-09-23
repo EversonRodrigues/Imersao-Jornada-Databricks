@@ -1,9 +1,9 @@
-# Prompt 4: Diretoria de Pricing
+# Prompt 4: gold da Diretoria de Pricing
 
-Por fim, a gold da Diretoria de Pricing. O diretor quer saber se estamos mais caros que a concorrência
-(Mercado Livre, Amazon, Magalu e Shopee) e em quais produtos agir. Siga as regras de gold do
-CLAUDE.md: SQL, CREATE OR REFRESH MATERIALIZED VIEW, tipo e COMMENT em todas as colunas, COMMENT
-na tabela, em português.
+Por fim, a gold da Diretoria de Pricing, no catálogo projetoaovivo. O diretor quer saber se estamos
+mais caros que a concorrência (Mercado Livre, Amazon, Magalu e Shopee) e em quais produtos agir.
+Siga as regras de gold do CLAUDE.md: SQL, CREATE OR REFRESH MATERIALIZED VIEW, tipo e COMMENT em
+todas as colunas, COMMENT na tabela, em português.
 
 TABELA
 gold.precos_competitividade, uma linha por produto que tem preço de concorrente (JOIN de silver.produtos
@@ -23,7 +23,7 @@ O produto com preço suspeito continua em todas as contas: promoção relâmpago
 possui_preco_suspeito só alerta que o preço precisa ser confirmado antes de reagir. Explique isso no
 comentário do arquivo e da coluna.
 
-TESTES (no notebook de testes que já existe)
+TESTES
 - id_produto único na tabela.
 
 NO FIM

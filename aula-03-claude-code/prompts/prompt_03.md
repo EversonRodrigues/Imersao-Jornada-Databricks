@@ -1,31 +1,35 @@
-# Prompt 3: Diretoria de Customer Success
+# Prompt 3: gold da Diretoria Comercial
 
-Agora a gold da Diretoria de Customer Success. A diretora quer saber quem são os melhores clientes,
-onde estão (estado e região) e como dividir a carteira em segmentos. Siga as regras de gold do
-CLAUDE.md: SQL, CREATE OR REFRESH MATERIALIZED VIEW, tipo e COMMENT em todas as colunas, COMMENT
-na tabela, em português.
+Agora a gold da Diretoria Comercial, no catálogo projetoaovivo. A diretora quer saber: quanto
+vendemos, quando (dia, hora, dia da semana), em qual canal e com quais produtos. Siga as regras de
+gold do CLAUDE.md: SQL, CREATE OR REFRESH MATERIALIZED VIEW, tipo e COMMENT em todas as colunas,
+COMMENT na tabela, em português. Cite o período dos dados (13/12/2025 a 11/01/2026) no comentário
+das tabelas.
 
-TABELA
-gold.clientes_segmentacao, uma linha por cliente, INCLUSIVE quem nunca comprou (LEFT JOIN a partir de
-silver.clientes, receita zero). É justamente esse cliente que o time de CS precisa ativar.
-Colunas: id_cliente, nome_cliente (sem pronome de tratamento), estado, nome_estado, regiao,
-total_compras, receita (COALESCE 0), ticket_medio (ROUND(AVG(receita), 2)), primeira_compra,
-ultima_compra, segmento_cliente, ranking_receita (ROW_NUMBER por receita desc).
+TABELAS
+1. gold.vendas_temporais, uma linha por data × hora × canal_venda.
+   Colunas: data, dia_semana, dia_semana_num, hora, canal_venda, total_vendas (COUNT), itens_vendidos
+   (SUM quantidade), receita (SUM), clientes_unicos (COUNT DISTINCT id_cliente).
+   Aviso no comentário de clientes_unicos: não somar entre linhas; para clientes únicos no período,
+   usar gold.clientes_segmentacao.
+2. gold.vendas_produtos, uma linha por produto vendido (LEFT JOIN de silver.vendas com silver.produtos).
+   Colunas: id_produto; nome_produto, categoria e marca (quando o produto não existe: "Produto não
+   cadastrado" e "Não cadastrado"); faixa_preco; produto_cadastrado; total_vendas; itens_vendidos;
+   receita; ticket_medio (ROUND(AVG(receita), 2)); ranking_receita (ROW_NUMBER geral por receita desc);
+   ranking_na_categoria (ROW_NUMBER por categoria).
+   Aviso no comentário de nome_produto: produtos diferentes têm o mesmo nome, contar por id_produto.
+3. gold.vendas_detalhadas, uma linha por venda, para perguntas que cruzam diretorias ("receita por
+   região e categoria", "canal preferido dos VIPs") e para os filtros cruzados do dashboard.
+   Colunas: id_venda, data_venda, data, dia_semana, dia_semana_num, hora, canal_venda, id_produto,
+   nome_produto, categoria, marca, faixa_preco (mesmos "não cadastrado" da anterior), id_cliente,
+   nome_cliente, estado, regiao e segmento_cliente (de gold.clientes_segmentacao), quantidade,
+   preco_unitario, receita, produto_cadastrado, venda_antes_do_cadastro. CLUSTER BY (data).
 
-REGRA DE SEGMENTAÇÃO (definida com a diretora, a partir da distribuição real)
-- VIP: receita a partir de R$ 22.000
-- TOP_TIER: de R$ 17.000 até R$ 21.999,99
-- REGULAR: abaixo de R$ 17.000
-Explique no comentário do arquivo por que os limites antigos (R$ 10.000 e R$ 5.000) não serviam:
-com eles quase todo mundo virava VIP.
-
-Se gold.vendas_detalhadas já existe, confira se ela usa esta tabela para o segmento.
-
-TESTES (no notebook de testes que já existe)
-- receita total igual à de silver.vendas;
-- id_cliente único; segmento só VIP, TOP_TIER ou REGULAR; nenhum VIP com receita abaixo de 22.000;
+TESTES
+- receita total de vendas_temporais, vendas_produtos e vendas_detalhadas igual à de silver.vendas;
+- vendas_detalhadas com o mesmo número de linhas de silver.vendas e id_venda único;
 - toda venda de vendas_detalhadas com segmento e região.
 
 NO FIM
-Valide, faça o deploy em dev, rode o Job e confira: 50 clientes; 10 VIP, 25 TOP_TIER e 15 REGULAR;
-receita R$ 974.077,28; o maior cliente é Ana Sophia Pereira (MG, R$ 30.716,63).
+Valide, faça o deploy em dev, rode o Job e confira: receita R$ 974.077,28 e 3.020 vendas em
+silver.vendas, vendas_temporais, vendas_produtos e vendas_detalhadas; 2.155 vendas no ecommerce.

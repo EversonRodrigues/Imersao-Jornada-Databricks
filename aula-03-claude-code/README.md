@@ -275,7 +275,7 @@ mkdir ecommerce-pipeline && cd ecommerce-pipeline
 databricks pipelines init -p imersao
 ```
 
-Responda às perguntas: nome `ecommerce_pipeline`, catálogo `ecommerce`, schema pessoal **no**, linguagem **python**. A CLI cria um bundle (`databricks.yml`), um recurso de pipeline em `resources/` e uma pasta `transformations/` com exemplos.
+Responda às perguntas: nome `ecommerce_pipeline`, catálogo `projetoaovivo`, schema pessoal **no**, linguagem **python**. A CLI cria um bundle (`databricks.yml`), um recurso de pipeline em `resources/` e uma pasta `transformations/` com exemplos.
 
 **2.2. Abra o Claude Code**
 
@@ -289,12 +289,12 @@ O projeto inteiro da Aula 3 sai de quatro prompts, um por arquivo em [`prompts/`
 
 | # | Prompt | O que sai |
 |---|---|---|
-| 1 | A silver | Convenções no `CLAUDE.md`, 4 tabelas silver com expectations e o placar `gold.qualidade_dados` |
-| 2 | Diretoria Comercial | `gold.vendas_temporais`, `gold.vendas_produtos`, `gold.vendas_detalhadas`, notebook de testes e o Job |
-| 3 | Diretoria de Customer Success | `gold.clientes_segmentacao` |
+| 1 | A silver | Convenções no `CLAUDE.md`, pipeline, 4 tabelas silver com expectations, notebook de testes e o Job |
+| 2 | Diretoria de Customer Success | `gold.clientes_segmentacao` |
+| 3 | Diretoria Comercial | `gold.vendas_temporais`, `gold.vendas_produtos`, `gold.vendas_detalhadas` |
 | 4 | Diretoria de Pricing | `gold.precos_competitividade` |
 
-Cada prompt traz o contexto, as regras de negócio, as colunas que o dashboard e o Genie da Aula 4 esperam e os números para conferir no fim. Entre um prompt e outro, **revise**: leia os arquivos que ele criou, confira os números e pergunte o porquê do que não entendeu.
+Os prompts trabalham no catálogo `projetoaovivo`, que já tem as 4 tabelas bronze. Cada prompt traz o contexto, as regras de negócio, as colunas que o dashboard e o Genie da Aula 4 esperam e os números para conferir no fim. Entre um prompt e outro, **revise**: leia os arquivos que ele criou, confira os números e pergunte o porquê do que não entendeu.
 
 Compare o resultado com o gabarito ([`pipeline/`](./pipeline/)). Não precisa ser idêntico, mas os números de referência (Passo 4) precisam bater.
 
