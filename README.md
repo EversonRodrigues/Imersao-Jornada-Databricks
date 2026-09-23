@@ -160,7 +160,7 @@ Os arquivos estão em [`dados/`](./dados/), em CSV (Aula 1) e Parquet (Aula 2).
 
 ## Atalho: o projeto inteiro com um comando
 
-Se você já tem a [Databricks CLI](https://docs.databricks.com/aws/en/dev-tools/cli/install) configurada (o passo a passo de instalação da CLI e do Claude Code está no [README da Aula 3](./aula-03-claude-code/README.md#parte-2-setup-faça-antes-da-aula-se-puder)), dá para implantar tudo (Job, dashboards e Genie) de uma vez. Isso é o que a Aula 3 ensina em detalhes:
+Se você já tem a [Databricks CLI](https://docs.databricks.com/aws/en/dev-tools/cli/install) configurada (o passo a passo de instalação da CLI e do Claude Code está no [README da Aula 3](./aula-03-claude-code/README.md#parte-3-setup-faça-antes-da-aula-se-puder)), dá para implantar tudo (Job, dashboards e Genie) de uma vez. Isso é o que a Aula 3 ensina em detalhes:
 
 ```bash
 databricks bundle deploy -t prod            # cria Job, 2 dashboards e o Genie space

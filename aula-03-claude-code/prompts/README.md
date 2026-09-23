@@ -16,7 +16,7 @@ Tudo acontece no catálogo **`projetoaovivo`**, que já tem as 4 tabelas bronze 
 Você precisa de:
 - a bronze no catálogo `projetoaovivo` (`projetoaovivo.bronze.vendas`, `produtos`, `clientes` e `preco_competidores`);
 - a Databricks CLI autenticada com o perfil `imersao`;
-- o Claude Code com o plugin Databricks (setup no [README](../README.md#parte-2-setup-faça-antes-da-aula-se-puder)).
+- o Claude Code com o plugin Databricks (setup no [README](../README.md#parte-3-setup-faça-antes-da-aula-se-puder)).
 
 Crie o projeto e abra o Claude Code:
 

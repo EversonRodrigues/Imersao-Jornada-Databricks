@@ -29,13 +29,13 @@
 | Bloco | Tempo | O que acontece |
 |---|---|---|
 | Teoria | 15 min | Objetivo de cada camada, pipeline declarativo, qualidade de dados, Claude Code, CLI e MCP |
+| Pela interface | 10 min | Criar uma materialized view **clicando**, para entender o conceito |
 | Setup | 15 min | Databricks CLI, autenticação, Claude Code, plugin Databricks e MCP |
-| Passo 1 | 10 min | Criar uma materialized view **pela interface**, para entender o conceito |
-| Passo 2 | 25 min | Projeto do zero com o Claude Code: bronze → silver → gold |
-| Passos 3 e 4 | 20 min | Deploy do gabarito, números de referência e placar de qualidade |
-| Passo 5 | 10 min | Ver o pipeline falhar de propósito |
-| Passo 6 | 20 min | Nova feature a partir do PRD: `gold.vendas_por_regiao` |
-| Passo 7 | 5 min | `dev` → `prod` |
+| Passo 1 | 25 min | Projeto do zero com o Claude Code e os 4 prompts: bronze → silver → gold |
+| Passos 2 e 3 | 20 min | Deploy do gabarito, números de referência e placar de qualidade |
+| Passo 4 | 10 min | Ver o pipeline falhar de propósito |
+| Passo 5 | 20 min | Nova feature a partir do PRD: `gold.vendas_por_regiao` |
+| Passo 6 | 5 min | `dev` → `prod` |
 
 ---
 
@@ -145,7 +145,62 @@ Expectations olham **uma linha por vez**. O que depende de várias linhas ou de 
 
 ---
 
-## Parte 2: setup (faça antes da aula se puder)
+## Parte 2: sua primeira materialized view, pela interface
+
+Antes de automatizar, vale ver o conceito com as próprias mãos.
+
+1. No menu lateral do Databricks, clique em **Jobs & Pipelines → Create → ETL pipeline**.
+2. Preencha:
+   - **Name:** `minha_primeira_mv`
+   - **Default catalog:** `ecommerce`
+   - **Default schema:** `silver`
+3. Escolha **Start with an empty file** e a linguagem **SQL**. Abre o editor de pipelines, com um arquivo em branco.
+4. Cole:
+
+   ```sql
+   CREATE OR REFRESH MATERIALIZED VIEW receita_por_canal (
+     CONSTRAINT receita_positiva EXPECT (receita > 0) ON VIOLATION FAIL UPDATE
+   )
+   COMMENT 'Teste da Aula 3: receita por canal a partir da bronze.'
+   AS
+   SELECT
+     canal_venda,
+     COUNT(*)                                          AS total_vendas,
+     CAST(SUM(quantidade * preco_unitario) AS DECIMAL(12,2)) AS receita
+   FROM bronze.vendas
+   GROUP BY canal_venda;
+   ```
+
+5. Clique em **Run pipeline**. Na primeira vez o serverless leva um ou dois minutos para subir.
+6. Observe:
+   - o **grafo**, com `receita_por_canal` e a seta vindo de `bronze.vendas`;
+   - a aba de **qualidade de dados** da tabela, com a expectation `receita_positiva` e quantas linhas passaram;
+   - no **Catalog Explorer**, `ecommerce.silver.receita_por_canal` com o tipo *Materialized view* e o comentário.
+7. Rode de novo: a tabela é atualizada, e não duplicada. É o `OR REFRESH`.
+8. Troque a condição para `receita > 1000000` e rode: o pipeline **falha** e a tabela continua com o dado anterior. É o `FAIL UPDATE` protegendo o diretor.
+9. Limpeza: apague o pipeline (menu ⋮ → **Delete**). A MV criada por ele é apagada junto.
+
+> **E sem pipeline?** No **SQL editor**, com o warehouse serverless, dá para criar uma MV avulsa com `CREATE MATERIALIZED VIEW ... AS SELECT ...` e atualizar com `REFRESH MATERIALIZED VIEW nome`. Serve para uma tabela solta; para uma cadeia silver → gold com qualidade, o pipeline é o lugar certo.
+
+### Isso foi pela interface. Agora: CLI + Claude Code
+
+Tudo o que você fez aqui foi **clicando**: criou o pipeline, escreveu o SQL no editor e apertou **Run**. Funciona para uma tabela, mas o projeto da aula tem 4 silvers, uma gold para cada diretoria, testes, um Job diário e dois ambientes (`dev` e `prod`). Clicando, ninguém sabe o que mudou, não dá para revisar antes de subir e não dá para recriar tudo num workspace novo.
+
+Por isso o resto da aula muda de ferramenta:
+
+| Pela interface (o que você acabou de fazer) | Pela CLI + Claude Code (o resto da aula) |
+|---|---|
+| Pipeline criado com cliques | Pipeline descrito num YAML (`resources/*.pipeline.yml`) |
+| SQL digitado no editor do workspace | Um arquivo `.py` ou `.sql` por tabela, no Git |
+| **Run pipeline** | `databricks bundle deploy` e `databricks bundle run` |
+| Você escreve cada linha | O Claude Code escreve a partir do PRD e dos prompts; você revisa |
+| Um ambiente | `dev` para testar, `prod` para os diretores |
+
+O conceito é o mesmo: `CREATE OR REFRESH MATERIALIZED VIEW`, expectations, grafo. Muda **como** você chega lá. Primeiro o setup.
+
+---
+
+## Parte 3: setup (faça antes da aula se puder)
 
 ### 1. Instale a Databricks CLI
 
@@ -223,48 +278,9 @@ O Claude Code é pago. Sem assinatura, dá para acompanhar a aula com o **Genie 
 
 ---
 
-## Parte 3: a aula passo a passo
+## Parte 4: a aula passo a passo, com CLI e Claude Code
 
-### Passo 1: sua primeira materialized view, pela interface
-
-Antes de automatizar, vale ver o conceito com as próprias mãos.
-
-1. No menu lateral do Databricks, clique em **Jobs & Pipelines → Create → ETL pipeline**.
-2. Preencha:
-   - **Name:** `minha_primeira_mv`
-   - **Default catalog:** `ecommerce`
-   - **Default schema:** `silver`
-3. Escolha **Start with an empty file** e a linguagem **SQL**. Abre o editor de pipelines, com um arquivo em branco.
-4. Cole:
-
-   ```sql
-   CREATE OR REFRESH MATERIALIZED VIEW receita_por_canal (
-     CONSTRAINT receita_positiva EXPECT (receita > 0) ON VIOLATION FAIL UPDATE
-   )
-   COMMENT 'Teste da Aula 3: receita por canal a partir da bronze.'
-   AS
-   SELECT
-     canal_venda,
-     COUNT(*)                                          AS total_vendas,
-     CAST(SUM(quantidade * preco_unitario) AS DECIMAL(12,2)) AS receita
-   FROM bronze.vendas
-   GROUP BY canal_venda;
-   ```
-
-5. Clique em **Run pipeline**. Na primeira vez o serverless leva um ou dois minutos para subir.
-6. Observe:
-   - o **grafo**, com `receita_por_canal` e a seta vindo de `bronze.vendas`;
-   - a aba de **qualidade de dados** da tabela, com a expectation `receita_positiva` e quantas linhas passaram;
-   - no **Catalog Explorer**, `ecommerce.silver.receita_por_canal` com o tipo *Materialized view* e o comentário.
-7. Rode de novo: a tabela é atualizada, e não duplicada. É o `OR REFRESH`.
-8. Troque a condição para `receita > 1000000` e rode: o pipeline **falha** e a tabela continua com o dado anterior. É o `FAIL UPDATE` protegendo o diretor.
-9. Limpeza: apague o pipeline (menu ⋮ → **Delete**). A MV criada por ele é apagada junto.
-
-> **E sem pipeline?** No **SQL editor**, com o warehouse serverless, dá para criar uma MV avulsa com `CREATE MATERIALIZED VIEW ... AS SELECT ...` e atualizar com `REFRESH MATERIALIZED VIEW nome`. Serve para uma tabela solta; para uma cadeia silver → gold com qualidade, o pipeline é o lugar certo.
-
-Clicar funciona para uma tabela. Para dez tabelas, dois ambientes e um Job diário, vamos para o código.
-
-### Passo 2: o projeto do zero, com o Claude Code
+### Passo 1: o projeto do zero, com o Claude Code
 
 Aqui você refaz o que está pronto neste repositório, começando de uma pasta vazia, como faria numa empresa. O repositório serve de **gabarito**.
 
@@ -296,9 +312,9 @@ O projeto inteiro da Aula 3 sai de quatro prompts, um por arquivo em [`prompts/`
 
 Os prompts trabalham no catálogo `projetoaovivo`, que já tem as 4 tabelas bronze. Cada prompt traz o contexto, as regras de negócio, as colunas que o dashboard e o Genie da Aula 4 esperam e os números para conferir no fim. Entre um prompt e outro, **revise**: leia os arquivos que ele criou, confira os números e pergunte o porquê do que não entendeu.
 
-Compare o resultado com o gabarito ([`pipeline/`](./pipeline/)). Não precisa ser idêntico, mas os números de referência (Passo 4) precisam bater.
+Compare o resultado com o gabarito ([`pipeline/`](./pipeline/)). Não precisa ser idêntico, mas os números de referência (Passo 3) precisam bater.
 
-### Passo 3: deploy do gabarito
+### Passo 2: deploy do gabarito
 
 De volta a este repositório:
 
@@ -319,7 +335,7 @@ Abra o pipeline **[dev seu_usuario] Transformação E-commerce** no workspace e 
 
 > **Já rodou a versão antiga da Aula 3?** As tabelas `silver.*` e `gold.*` antigas são tabelas comuns, e uma materialized view não assume o lugar de uma tabela que já existe. Apague-as uma vez antes do primeiro run (SQL editor): `DROP TABLE IF EXISTS ecommerce.silver.vendas;` e o mesmo para `produtos`, `clientes`, `preco_competidores`, `gold.vendas_temporais`, `gold.vendas_produtos`, `gold.clientes_segmentacao` e `gold.precos_competitividade`.
 
-### Passo 4: números de referência e placar de qualidade
+### Passo 3: números de referência e placar de qualidade
 
 | O que conferir | Esperado |
 |---|---|
@@ -377,7 +393,7 @@ Confira no workspace (perfil imersao) os números de referência do CLAUDE.md e 
 tabela gold.qualidade_dados.
 ```
 
-### Passo 5: veja o pipeline falhar (de propósito)
+### Passo 4: veja o pipeline falhar (de propósito)
 
 ```
 Em pipeline/silver/vendas.py, mova a regra produto_cadastrado de @dp.expect_all para
@@ -388,7 +404,7 @@ O pipeline para em `silver.vendas`, nenhuma gold é recalculada, `testes_qualida
 
 Faça o mesmo com um teste entre tabelas: troque o limite de produtos não cadastrados de 1% para 0,5% em `testes/03_testes_qualidade.py`. O real é 0,66%, então o Job fica vermelho na última tarefa.
 
-### Passo 6: nova feature a partir do PRD
+### Passo 5: nova feature a partir do PRD
 
 A seção 9 do [`PRD.md`](./PRD.md) descreve `gold.vendas_por_regiao`. Peça:
 
@@ -405,7 +421,7 @@ Revise o que ele propõe, aprove e acompanhe:
 
 > Esqueceu um comentário de coluna? O teste `gold: toda coluna tem comentário` pega.
 
-### Passo 7: commit e produção
+### Passo 6: commit e produção
 
 ```bash
 git add -A && git commit -m "Adiciona gold.vendas_por_regiao"
@@ -424,7 +440,7 @@ Em `prod`, o Job fica agendado para todo dia às 6h, e o dashboard **Diretoria E
 |---|---|---|
 | `cannot configure default credentials` | Faltou o perfil | Use `-p imersao` em todo comando |
 | `Metastore storage root URL does not exist` | Tentou criar catálogo pela API | Crie com SQL (`CREATE CATALOG IF NOT EXISTS ecommerce`) ou rode a Aula 1 |
-| Pipeline falha dizendo que a tabela já existe ou não é gerenciada por ele | Tabela antiga criada por notebook com o mesmo nome | `DROP TABLE` na tabela antiga (Passo 3) e rode de novo |
+| Pipeline falha dizendo que a tabela já existe ou não é gerenciada por ele | Tabela antiga criada por notebook com o mesmo nome | `DROP TABLE` na tabela antiga (Passo 2) e rode de novo |
 | `CREATE OR REPLACE MATERIALIZED VIEW` rejeitado no pipeline | Sintaxe do SQL editor, não do pipeline | Dentro do pipeline é `CREATE OR REFRESH` |
 | Pipeline parado em *Initializing* | Primeira subida do serverless | Espere alguns minutos; não cancele |
 | Pipeline vermelho com `EXPECTATION_VIOLATION` | Uma regra `fail` foi quebrada | Abra a tabela no grafo → aba de qualidade: mostra a regra e as linhas |
