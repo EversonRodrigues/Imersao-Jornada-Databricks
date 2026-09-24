@@ -21,29 +21,38 @@ CONVENÇÕES (grave nas instruções do projeto: o CLAUDE.md, ou o AGENTS.md que
 O QUE VAI NO SPACE
 - Tabelas: as 5 golds (vendas_temporais, vendas_produtos, vendas_detalhadas, clientes_segmentacao e
   precos_competitividade). Nenhuma tabela da bronze ou da silver.
-- Instruções gerais, curtas, só com regra de negócio que não cabe num comentário: responder em
-  português; dinheiro em R$ com 2 casas; receita é bruta e não existe custo, margem ou lucro;
-  o período vai de 13/12/2025 a 11/01/2026 e "no mês" ou "até agora" é o período inteiro, nunca
-  current_date(); "hoje", "ontem" e "esta semana" não se respondem, porque 11/01/2026 não é hoje
-  (explique o período e ofereça o último dia disponível); qual tabela usar para cada tipo de pergunta (tempo e canal, produto, cliente,
-  preço, e vendas_detalhadas para o que cruza diretorias); ticket médio = SUM(receita) /
-  SUM(total_vendas); contar produto por id_produto; dia da semana com a receita média por dia;
-  segmentos VIP (a partir de R$ 22.000), TOP_TIER (R$ 17.000 a R$ 21.999,99) e REGULAR;
-  "mais caro que o mercado" = diferenca_pct_vs_media > 0 e "mais caro que todos" =
-  MAIS_CARO_QUE_TODOS; toda contagem de produtos em precos_competitividade separa os confirmados
-  dos que têm preço suspeito (a confirmar antes de reagir) e diz em que categoria estão os
-  suspeitos; em "qual X vende mais", traga junto a receita e a quantidade que dá contexto
-  (vendas, clientes); canais exibidos como "E-commerce" e "Loja física"; rankings com 10 linhas.
+- Instruções gerais, curtas (até uns 2.500 caracteres), só com regra de negócio que não cabe num
+  comentário: responder em português; dinheiro em R$ com 2 casas; receita é bruta e não existe
+  custo, margem ou lucro; o período vai de 13/12/2025 a 11/01/2026 e "no mês" ou "até agora" é o
+  período inteiro, nunca current_date(); "hoje", "ontem" e "esta semana" não se respondem, porque
+  11/01/2026 não é hoje: não gere SQL, explique o período em texto e pergunte se quer ver
+  11/01/2026; qual tabela usar para cada tipo de pergunta (tempo e canal, produto, cliente, preço, e
+  vendas_detalhadas para o que cruza diretorias); ticket médio = receita ÷ número de vendas
+  (SUM(total_vendas) em vendas_temporais e vendas_produtos, COUNT(*) em vendas_detalhadas,
+  SUM(total_compras) em clientes_segmentacao); contar produto por id_produto; dia da semana pela
+  receita média por dia, citando também o dia de maior receita total e por que ele lidera; segmentos
+  VIP (a partir de R$ 22.000), TOP_TIER (R$ 17.000 a R$ 21.999,99) e REGULAR; "mais caro que o
+  mercado" = diferenca_pct_vs_media > 0 e "mais caro que todos" = MAIS_CARO_QUE_TODOS; toda contagem
+  de produtos em precos_competitividade separa os confirmados dos que têm preço suspeito (a
+  confirmar antes de reagir) e diz em que categoria estão os suspeitos, com o total; em "qual X
+  vende mais", traga receita, número de vendas e ticket médio, e número de clientes (COUNT DISTINCT
+  id_cliente) só em pergunta por região, estado ou segmento, nunca somando clientes_unicos; canais
+  exibidos como "E-commerce" e "Loja física"; rankings com 10 linhas.
 - Joins: vendas_produtos × precos_competitividade por id_produto (um para um) e
   vendas_detalhadas × clientes_segmentacao por id_cliente (muitos para um).
 - SQL de exemplo (pergunta → SQL certo) para as contas em que a IA costuma errar, SEM repetir as
-  perguntas do teste abaixo (senão o teste vira cola): ticket médio por segmento de cliente, hora
-  do dia que mais vende pela receita média por dia, participação dos TOP_TIER na receita e produtos
-  de uma categoria mais caros que o mercado, separando preço suspeito. Teste cada SQL no warehouse.
-  Mais a medida "ticket médio" como SQL snippet.
+  perguntas do teste abaixo (senão o teste vira cola): ticket médio por segmento de cliente,
+  participação dos TOP_TIER na receita, receita por região e categoria (vendas_detalhadas) e
+  quantos produtos estão mais caros que a média do mercado, numa contagem com uma linha por
+  situação (confirmado ou a confirmar), o total e as categorias dos suspeitos. Regra que falha em
+  texto costuma passar com um SQL de exemplo no formato certo. Teste cada SQL no warehouse. Mais a
+  medida "ticket médio" (de vendas_temporais) como SQL snippet.
 - Sinônimos nas colunas: faturamento → receita, UF → estado, canal → canal_venda,
   perfil → segmento_cliente, posição de preço → classificacao_preco.
-- 6 perguntas de exemplo na tela inicial, duas de cada diretoria.
+- 6 perguntas de exemplo na tela inicial, duas de cada diretoria, testadas: nenhuma pode voltar
+  vazia.
+- Os identificadores das tabelas ficam escritos no JSON (projetoaovivo.gold.<tabela>), porque o
+  arquivo não passa por variáveis do bundle: anote isso nas instruções do projeto.
 
 TESTE (é aqui que se ganha a confiança dos diretores)
 Faça o deploy em dev e pergunte ao space pela API de conversa do Genie. Para cada pergunta, compare

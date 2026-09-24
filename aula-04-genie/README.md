@@ -195,6 +195,8 @@ databricks bundle summary -t dev -p <perfil>    # links dos dashboards e do Geni
 
 Essa evolução é o ponto da aula: o Genie errou do jeito que um analista novo erraria, e cada erro virou uma regra escrita. As regras dessas rodadas já estão no [prompt 2](./prompts/prompt_02.md), então no seu projeto o Genie tende a acertar mais cedo.
 
+Uma segunda execução do prompt, num projeto limpo, também fechou em 10/10 (em 4 rodadas) e ensinou mais uma coisa: **regra em texto é instável**. A instrução "separe os preços suspeitos e diga a categoria" não fez o Genie citar o Tênis; um **SQL de exemplo** com uma contagem por situação (confirmado × a confirmar), o total e as categorias resolveu na hora. Mexer numa instrução também pode fazer outra pergunta regredir, por isso o teste refaz as 12 perguntas a cada rodada.
+
 ---
 
 ## Erros comuns

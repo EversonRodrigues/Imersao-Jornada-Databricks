@@ -175,6 +175,8 @@ perguntas com resposta conhecida  →  pergunta ao space pela API  →  compara 
 
 - **Não mude o esperado para passar no teste.** Mude o contexto.
 - **Não copie a pergunta do teste para os SQLs de exemplo.** O placar sobe, mas você mediu cola, não entendimento.
+- **Quando a instrução em texto não pega, mostre o formato em SQL.** No teste, "separe os preços suspeitos" em texto falhou; um SQL de exemplo com a contagem por situação e o total resolveu.
+- **Refaça todas as perguntas a cada mudança.** Ajustar uma regra pode fazer outra resposta regredir.
 - **Benchmarks:** o próprio space guarda um conjunto de perguntas com o SQL certo e mede o acerto a cada mudança. É a versão "oficial" do teste que o prompt faz pela API.
 - **Monitoramento:** depois de entregar, o histórico de conversas mostra o que os diretores perguntam, e o 👍/👎 deles mostra onde o Genie errou. Pergunta que aparece toda hora vira SQL de exemplo; erro recorrente vira instrução.
 
