@@ -1,6 +1,6 @@
 # 10 perguntas para a demonstração do Genie
 
-Da mais fácil para a mais difícil. Cada resposta foi conferida com o SQL abaixo **e** respondida corretamente pelo Genie space deste projeto em 21/09/2026 (10 de 10). As perguntas de limite (lucro) também foram testadas.
+Da mais fácil para a mais difícil. São as mesmas perguntas que o [prompt 2](./prompts/prompt_02.md) usa para testar o Genie. Cada resposta foi conferida com o SQL abaixo **e** respondida corretamente pelo Genie space criado pelo prompt, em 24/09/2026 (10 de 10, mais as 2 perguntas de limite).
 
 Se o seu Genie responder diferente, compare o SQL que ele gerou (botão **Show code**) com o SQL de referência.
 
@@ -81,14 +81,18 @@ FROM ecommerce.gold.vendas_temporais
 GROUP BY dia_semana, dia_semana_num ORDER BY receita_media_por_dia DESC
 ```
 
-### 9. Quantos produtos estão mais caros que todos os concorrentes, e em quais categorias?
-**Esperado:** 35 produtos. Tênis concentra 15 deles; depois Casa, Cozinha e Moda com 3 cada.
+### 9. Quantos produtos estão mais caros que todos os concorrentes?
+**Esperado:** 35 produtos: **20 confirmados** e **15 com preço suspeito a confirmar**, todos de Tênis. Entre os confirmados, Casa, Cozinha e Moda lideram com 3 cada.
+
+Os 15 Tênis têm preço de concorrente exatamente pela metade do nosso e nenhuma venda: é erro de coleta (ou promoção), não preço real. Um Genie que responde "35, a maioria Tênis" sem essa ressalva leva o diretor a baixar preço por causa de um dado errado. **Bom ponto para discutir com a turma.**
 
 ```sql
-SELECT categoria, COUNT(*) AS produtos
+SELECT categoria,
+       COUNT(*) FILTER (WHERE NOT possui_preco_suspeito) AS confirmados,
+       COUNT(*) FILTER (WHERE possui_preco_suspeito)     AS a_confirmar
 FROM ecommerce.gold.precos_competitividade
 WHERE classificacao_preco = 'MAIS_CARO_QUE_TODOS'
-GROUP BY categoria ORDER BY produtos DESC
+GROUP BY categoria ORDER BY confirmados + a_confirmar DESC
 ```
 
 ### 10. Dos 10 produtos que mais faturam, quais estão mais caros que a média do mercado?
@@ -111,5 +115,5 @@ ORDER BY v.ranking_receita
 Boas para discutir com a turma o que a IA **não** deve inventar:
 
 - *"Qual foi o nosso lucro?"* Não há custo nos dados. O Genie foi instruído a dizer que só existe receita.
-- *"Quanto vendemos ontem?"* Os dados vão até 11/01/2026. O Genie foi instruído a não usar a data de hoje.
+- *"Quanto vendemos ontem?"* Os dados vão até 11/01/2026. O Genie foi instruído a não usar a data de hoje **e** a não tratar 11/01/2026 como hoje: no primeiro teste, sem essa regra, ele respondeu com as vendas de 10/01/2026 como se fossem "ontem".
 - *"Qual o CPF da Ana Sophia?"* Não existe essa coluna. Uma boa resposta admite que o dado não está disponível.

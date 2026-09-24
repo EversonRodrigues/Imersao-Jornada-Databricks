@@ -449,4 +449,4 @@ Em `prod`, o Job fica agendado para todo dia às 6h, e o dashboard **Diretoria E
 
 ## Amanhã
 
-O dado está organizado, com qualidade medida, documentado e atualizado todo dia. Na [Aula 4](../aula-04-genie/) os diretores deixam de depender de você para perguntar: eles conversam com a gold em português, pelo **Genie**, e acompanham tudo no dashboard.
+O dado está organizado, com qualidade medida, documentado e atualizado todo dia. Na [Aula 4](../aula-04-genie/), com mais 2 prompts, a gold vira produto: um dashboard para cada diretor e um agente do **Genie** que responde em português, testado antes de chegar a eles.

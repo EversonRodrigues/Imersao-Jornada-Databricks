@@ -76,4 +76,4 @@ ORDER BY table_name, ordinal_position;
 -- COMMAND ----------
 
 -- MAGIC %md
--- MAGIC **Próximo passo:** criar o Genie space (veja o `README.md` desta pasta). As instruções, as perguntas de exemplo e o SQL de referência estão em `genie/diretoria_ecommerce.geniespace.json`.
+-- MAGIC **Próximo passo:** os 2 prompts da aula (`prompts/prompt_01.md` para os dashboards e `prompts/prompt_02.md` para o Genie). O gabarito do Genie, com instruções, joins e SQL de exemplo, está em `genie/diretoria_ecommerce.geniespace.json`.

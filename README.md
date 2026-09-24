@@ -21,7 +21,7 @@ Em 4 aulas você vai responder essas perguntas, automatizar a chegada dos dados,
 ```
  Dia 1                Dia 2                    Dia 3                    Dia 4
  Responder na mão  →  Automatizar a chegada →  Profissionalizar com IA →  Autonomia para o negócio
- SQL + Dashboard      Python + Pipeline        Claude Code + Deploy       Genie
+ SQL + Dashboard      Python + Pipeline        Claude Code + Deploy       Dashboards + Genie
 ```
 
 | Dia | Tema | O que você entrega no fim | Material |
@@ -29,7 +29,7 @@ Em 4 aulas você vai responder essas perguntas, automatizar a chegada dos dados,
 | **1** | SQL & Dashboard | As 3 diretorias respondidas e um dashboard publicado | [aula-01-sql-dashboard](./aula-01-sql-dashboard/) |
 | **2** | Python & Engenharia de Dados | Ingestão automática do data lake para a camada bronze | [aula-02-python-engenharia](./aula-02-python-engenharia/) |
 | **3** | Claude Code & Engenharia de Dados | Silver e gold construídas com IA, testes de qualidade e deploy | [aula-03-claude-code](./aula-03-claude-code/) |
-| **4** | Genie | Os diretores perguntando em português e recebendo a resposta certa | [aula-04-genie](./aula-04-genie/) |
+| **4** | Dashboards & Genie | Um dashboard para cada diretor e um agente do Genie testado, criados com 2 prompts | [aula-04-genie](./aula-04-genie/) |
 
 A frase que resume a imersão: **no dia 1 você respondeu o diretor; no dia 4 ele não precisa mais de você para perguntar.**
 
@@ -56,7 +56,7 @@ flowchart LR
     end
 
     subgraph Consumo
-        DASH[Dashboard AI/BI<br/>Aulas 1 e 3]
+        DASH[Dashboards AI/BI<br/>Aulas 1, 3 e 4]
         GEN[Genie<br/>Aula 4]
     end
 
@@ -151,9 +151,11 @@ Os arquivos estão em [`dados/`](./dados/), em CSV (Aula 1) e Parquet (Aula 2).
 │   ├── testes/03_testes_qualidade.py  ← testes que param o Job se o dado estiver errado
 │   └── dashboard/                     ← dashboard lendo da gold
 └── aula-04-genie/
-    ├── 01_preparar_dados_para_ia.sql  ← comentários que ensinam o Genie
-    ├── genie/                         ← definição do Genie space
-    └── perguntas_demo.md              ← 10 perguntas com a resposta conferida
+    ├── prompts/                       ← a Aula 4 inteira em 2 prompts: 3 dashboards e o agente do Genie
+    ├── dashboards/                    ← gabarito: um dashboard por diretoria
+    ├── genie/                         ← gabarito: definição do Genie space
+    ├── 01_preparar_dados_para_ia.sql  ← o que o Genie enxerga da gold
+    └── perguntas_demo.md              ← as perguntas de teste do Genie, com a resposta conferida
 ```
 
 ---
@@ -163,7 +165,7 @@ Os arquivos estão em [`dados/`](./dados/), em CSV (Aula 1) e Parquet (Aula 2).
 Se você já tem a [Databricks CLI](https://docs.databricks.com/aws/en/dev-tools/cli/install) configurada (o passo a passo de instalação da CLI e do Claude Code está no [README da Aula 3](./aula-03-claude-code/README.md#parte-3-setup-faça-antes-da-aula-se-puder)), dá para implantar tudo (Job, dashboards e Genie) de uma vez. Isso é o que a Aula 3 ensina em detalhes:
 
 ```bash
-databricks bundle deploy -t prod            # cria Job, 2 dashboards e o Genie space
+databricks bundle deploy -t prod            # cria Job, pipeline, dashboards e o Genie space
 databricks bundle run pipeline_ecommerce -t prod   # roda ingestão → gold → testes → documentação
 ```
 

@@ -1,11 +1,14 @@
 # Aula 4: os diretores perguntam em português, o Genie responde em cima da gold.
+# Gerado pelo prompt 2 da aula (aula-04-genie/prompts/prompt_02.md) e testado com as perguntas de
+# aula-04-genie/perguntas_demo.md. Mudou uma instrução? Edite o JSON e faça deploy: ajuste feito
+# pela interface se perde no próximo deploy.
 resources:
   genie_spaces:
     diretoria_ecommerce:
       title: Diretoria E-commerce
       description: >-
-        Pergunte em português sobre vendas, clientes e preços da concorrência.
-        Dados de ecommerce.gold, atualizados todo dia às 6h.
+        Pergunte em português sobre vendas, clientes e preços da concorrência (Mercado Livre,
+        Amazon, Magalu e Shopee). Dados de ecommerce.gold, atualizados todo dia às 6h.
       warehouse_id: ${var.warehouse_id}
       parent_path: /Workspace/Users/${workspace.current_user.userName}
       file_path: ../aula-04-genie/genie/diretoria_ecommerce.geniespace.json

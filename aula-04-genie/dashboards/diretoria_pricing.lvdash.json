@@ -1,0 +1,720 @@
+{
+  "datasets": [
+    {
+      "name": "ds_precos",
+      "displayName": "Preços vs. concorrência (uma linha por produto)",
+      "queryLines": [
+        "SELECT id_produto, nome_produto, categoria, marca,\n",
+        "       nosso_preco, preco_medio_concorrentes, preco_minimo_concorrentes, total_concorrentes,\n",
+        "       diferenca_pct_vs_media / 100 AS diferenca_vs_media,\n",
+        "       diferenca_pct_vs_minimo / 100 AS diferenca_vs_minimo,\n",
+        "       classificacao_preco,\n",
+        "       CASE classificacao_preco WHEN 'MAIS_CARO_QUE_TODOS' THEN 'Mais caro que todos' WHEN 'ACIMA_DA_MEDIA' THEN 'Acima da média' WHEN 'NA_MEDIA' THEN 'Na média' WHEN 'ABAIXO_DA_MEDIA' THEN 'Abaixo da média' WHEN 'MAIS_BARATO_QUE_TODOS' THEN 'Mais barato que todos' ELSE classificacao_preco END AS classificacao,\n",
+        "       possui_preco_suspeito,\n",
+        "       CASE WHEN possui_preco_suspeito THEN 'Sim' ELSE 'Não' END AS preco_a_confirmar,\n",
+        "       CASE WHEN possui_preco_suspeito THEN 'Preço suspeito (a conferir)' ELSE 'Confirmado' END AS situacao_preco,\n",
+        "       CASE WHEN classificacao_preco = 'MAIS_CARO_QUE_TODOS' AND NOT possui_preco_suspeito THEN 1 ELSE 0 END AS mais_caro_confirmado,\n",
+        "       CASE WHEN possui_preco_suspeito THEN 1 ELSE 0 END AS suspeito,\n",
+        "       receita, itens_vendidos\n",
+        "FROM precos_competitividade\n",
+        "ORDER BY receita DESC, id_produto\n"
+      ],
+      "columns": [
+        {
+          "displayName": "produtos",
+          "description": "Produtos monitorados",
+          "expression": "COUNT(`id_produto`)"
+        },
+        {
+          "displayName": "mais_caros_confirmados",
+          "description": "Mais caros que todos, sem preço suspeito",
+          "expression": "SUM(`mais_caro_confirmado`)"
+        },
+        {
+          "displayName": "receita_mais_caros_confirmados",
+          "description": "Receita dos mais caros confirmados",
+          "expression": "SUM(`receita` * `mais_caro_confirmado`)"
+        },
+        {
+          "displayName": "produtos_suspeitos",
+          "description": "Produtos com preço suspeito",
+          "expression": "SUM(`suspeito`)"
+        }
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "pricing",
+      "displayName": "Pricing",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "titulo",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Diretoria de Pricing\n",
+                "\n",
+                "Estamos mais caros que a concorrência (Mercado Livre, Amazon, Magalu e Shopee), e em quais produtos agir? ",
+                "Preço suspeito (concorrente abaixo de 60% do nosso preço) é erro de coleta ou promoção: confira antes de reagir. ",
+                "Período das vendas: 13/12/2025 a 11/01/2026. Fonte: catálogo do bundle, schema gold (precos_competitividade).\n"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_monitorados",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_precos",
+                  "fields": [
+                    {
+                      "name": "measure(produtos)",
+                      "expression": "MEASURE(`produtos`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(produtos)",
+                  "displayName": "Produtos monitorados",
+                  "format": {
+                    "type": "number-plain",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Produtos monitorados"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_mais_caros",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_precos",
+                  "fields": [
+                    {
+                      "name": "measure(mais_caros_confirmados)",
+                      "expression": "MEASURE(`mais_caros_confirmados`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(mais_caros_confirmados)",
+                  "displayName": "Mais caros que todos (confirmados)",
+                  "format": {
+                    "type": "number-plain",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Mais caros que todos (confirmados)",
+                "showDescription": true,
+                "description": "Sem preço suspeito: dá para agir"
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_receita_mais_caros",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_precos",
+                  "fields": [
+                    {
+                      "name": "measure(receita_mais_caros_confirmados)",
+                      "expression": "MEASURE(`receita_mais_caros_confirmados`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(receita_mais_caros_confirmados)",
+                  "displayName": "Receita desses produtos",
+                  "format": {
+                    "type": "number-currency",
+                    "currencyCode": "BRL",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 2
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Receita desses produtos",
+                "showDescription": true,
+                "description": "Receita no período dos mais caros confirmados"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi_suspeitos",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_precos",
+                  "fields": [
+                    {
+                      "name": "measure(produtos_suspeitos)",
+                      "expression": "MEASURE(`produtos_suspeitos`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "measure(produtos_suspeitos)",
+                  "displayName": "Preço suspeito a conferir",
+                  "format": {
+                    "type": "number-plain",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 0
+                    }
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Preço suspeito a conferir",
+                "showDescription": true,
+                "description": "Erro de coleta ou promoção: conferir antes de agir"
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 5,
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "produtos_classificacao",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_precos",
+                  "fields": [
+                    {
+                      "name": "classificacao",
+                      "expression": "`classificacao`"
+                    },
+                    {
+                      "name": "situacao_preco",
+                      "expression": "`situacao_preco`"
+                    },
+                    {
+                      "name": "measure(produtos)",
+                      "expression": "MEASURE(`produtos`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "classificacao",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "custom-order",
+                      "orderedValues": [
+                        "Mais caro que todos",
+                        "Acima da média",
+                        "Na média",
+                        "Abaixo da média",
+                        "Mais barato que todos"
+                      ]
+                    }
+                  },
+                  "displayName": "Classificação de preço"
+                },
+                "y": {
+                  "fieldName": "measure(produtos)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Produtos"
+                },
+                "color": {
+                  "fieldName": "situacao_preco",
+                  "scale": {
+                    "type": "categorical",
+                    "mappings": [
+                      {
+                        "value": "Confirmado",
+                        "color": "#1D425C"
+                      },
+                      {
+                        "value": "Preço suspeito (a conferir)",
+                        "color": "#FF7E5C"
+                      }
+                    ]
+                  },
+                  "displayName": "Situação do preço"
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Produtos por classificação de preço: confirmados × suspeitos"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 8,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "diferenca_categoria",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_precos",
+                  "fields": [
+                    {
+                      "name": "categoria",
+                      "expression": "`categoria`"
+                    },
+                    {
+                      "name": "avg(diferenca_vs_media)",
+                      "expression": "AVG(`diferenca_vs_media`)"
+                    }
+                  ],
+                  "disaggregated": false,
+                  "filters": [
+                    {
+                      "expression": "`possui_preco_suspeito` = false"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "avg(diferenca_vs_media)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Diferença média vs. média dos concorrentes (%)",
+                  "format": {
+                    "type": "number-percent",
+                    "decimalPlaces": {
+                      "type": "exact",
+                      "places": 2
+                    }
+                  }
+                },
+                "y": {
+                  "fieldName": "categoria",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "x-reversed"
+                    }
+                  },
+                  "displayName": "Categoria"
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Diferença média vs. mercado por categoria (sem preços suspeitos)",
+                "showDescription": true,
+                "description": "Média, por produto, da diferença do nosso preço contra a média dos concorrentes. Positivo = mais caro"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 8,
+            "width": 6,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "acao_mais_caros",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "ds_precos",
+                  "fields": [
+                    {
+                      "name": "nome_produto",
+                      "expression": "`nome_produto`"
+                    },
+                    {
+                      "name": "id_produto",
+                      "expression": "`id_produto`"
+                    },
+                    {
+                      "name": "categoria",
+                      "expression": "`categoria`"
+                    },
+                    {
+                      "name": "nosso_preco",
+                      "expression": "`nosso_preco`"
+                    },
+                    {
+                      "name": "preco_medio_concorrentes",
+                      "expression": "`preco_medio_concorrentes`"
+                    },
+                    {
+                      "name": "preco_minimo_concorrentes",
+                      "expression": "`preco_minimo_concorrentes`"
+                    },
+                    {
+                      "name": "diferenca_vs_media",
+                      "expression": "`diferenca_vs_media`"
+                    },
+                    {
+                      "name": "diferenca_vs_minimo",
+                      "expression": "`diferenca_vs_minimo`"
+                    },
+                    {
+                      "name": "receita",
+                      "expression": "`receita`"
+                    },
+                    {
+                      "name": "preco_a_confirmar",
+                      "expression": "`preco_a_confirmar`"
+                    }
+                  ],
+                  "disaggregated": true,
+                  "filters": [
+                    {
+                      "expression": "`classificacao_preco` = 'MAIS_CARO_QUE_TODOS'"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "nome_produto",
+                    "displayName": "Produto"
+                  },
+                  {
+                    "fieldName": "id_produto",
+                    "displayName": "ID do produto"
+                  },
+                  {
+                    "fieldName": "categoria",
+                    "displayName": "Categoria"
+                  },
+                  {
+                    "fieldName": "nosso_preco",
+                    "displayName": "Nosso preço (R$)",
+                    "format": {
+                      "type": "number-currency",
+                      "currencyCode": "BRL",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 2
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "preco_medio_concorrentes",
+                    "displayName": "Preço médio concorrentes (R$)",
+                    "format": {
+                      "type": "number-currency",
+                      "currencyCode": "BRL",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 2
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "preco_minimo_concorrentes",
+                    "displayName": "Preço mínimo concorrentes (R$)",
+                    "format": {
+                      "type": "number-currency",
+                      "currencyCode": "BRL",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 2
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "diferenca_vs_media",
+                    "displayName": "Diferença vs. média (%)",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 2
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "diferenca_vs_minimo",
+                    "displayName": "Diferença vs. mínimo (%)",
+                    "format": {
+                      "type": "number-percent",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 2
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "receita",
+                    "displayName": "Receita (R$)",
+                    "format": {
+                      "type": "number-currency",
+                      "currencyCode": "BRL",
+                      "decimalPlaces": {
+                        "type": "exact",
+                        "places": 2
+                      }
+                    }
+                  },
+                  {
+                    "fieldName": "preco_a_confirmar",
+                    "displayName": "Preço a confirmar"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Ação: produtos mais caros que todos os concorrentes, por receita",
+                "showDescription": true,
+                "description": "\"Preço a confirmar = Sim\": concorrente abaixo de 60% do nosso preço; confira a coleta antes de mexer no preço"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 14,
+            "width": 12,
+            "height": 9
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_categoria",
+            "queries": [
+              {
+                "name": "q_categoria",
+                "query": {
+                  "datasetName": "ds_precos",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "name": "categoria",
+                      "expression": "`categoria`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "categoria",
+                    "queryName": "q_categoria",
+                    "displayName": "Categoria"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Categoria"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "filtro_classificacao",
+            "queries": [
+              {
+                "name": "q_classificacao",
+                "query": {
+                  "datasetName": "ds_precos",
+                  "disaggregated": false,
+                  "fields": [
+                    {
+                      "name": "classificacao",
+                      "expression": "`classificacao`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-multi-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "classificacao",
+                    "queryName": "q_classificacao",
+                    "displayName": "Classificação de preço"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Classificação de preço"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 3,
+            "width": 6,
+            "height": 2
+          }
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {
+        "light": "#F7F8FA",
+        "dark": "#1F272D"
+      },
+      "widgetBackgroundColor": {
+        "light": "#FFFFFF",
+        "dark": "#11171C"
+      },
+      "widgetBorderColor": {
+        "light": "#FFFFFF",
+        "dark": "#11171C"
+      },
+      "fontColor": {
+        "light": "#11171C",
+        "dark": "#E8ECF0"
+      },
+      "selectionColor": {
+        "light": "#2272B4",
+        "dark": "#8ACAFF"
+      },
+      "visualizationColors": [
+        "#1D425C",
+        "#4E5185",
+        "#995495",
+        "#DE5582",
+        "#FF7054",
+        "#FFA600",
+        "#99DDB4"
+      ],
+      "widgetHeaderAlignment": "LEFT"
+    }
+  }
+}

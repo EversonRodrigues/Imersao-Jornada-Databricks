@@ -1,0 +1,11 @@
+# Aula 4: dashboard "Diretoria de Customer Success", gerado pelo prompt 1 da aula (aula-04-genie/prompts/prompt_01.md).
+# As consultas usam só o nome da tabela; catálogo e schema vêm daqui, então o mesmo JSON serve
+# para dev e prod.
+resources:
+  dashboards:
+    diretoria_customer_success:
+      display_name: Diretoria de Customer Success
+      file_path: ../aula-04-genie/dashboards/diretoria_customer_success.lvdash.json
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.catalogo}
+      dataset_schema: gold
